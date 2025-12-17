@@ -561,8 +561,8 @@ async def get_watchlist(user: dict = Depends(get_current_user)):
     watchlist = await db.watchlists.find_one({"user_id": user["id"]}, {"_id": 0})
     if not watchlist:
         watchlist = {"user_id": user["id"], "symbols": ["BTC/USD", "ETH/USD", "EUR/USD"]}
-        await db.watchlists.insert_one(watchlist)
-    return watchlist
+        await db.watchlists.insert_one({**watchlist, "_id": None})
+    return {k: v for k, v in watchlist.items() if k != "_id"}
 
 @api_router.post("/watchlist/add")
 async def add_to_watchlist(symbol: str, user: dict = Depends(get_current_user)):
