@@ -12,6 +12,7 @@ class AlphaMindAPITester:
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
+        self.created_trade_id = None
 
     def log_test(self, name, success, details=""):
         """Log test results"""
