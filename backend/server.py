@@ -559,12 +559,54 @@ async def get_bot_config(user: dict = Depends(get_current_user)):
             "enabled": False,
             "risk_per_trade": 0.02,
             "max_daily_trades": 10,
-            "allowed_markets": ["crypto", "forex", "stocks"],
+            "allowed_markets": ["crypto", "forex", "indices", "metals"],
             "strategies": ["ICT", "SMC", "WYCKOFF"],
-            "auto_execute": False
+            "auto_execute": False,
+            "mt5_connected": False,
+            "mt5_server": None,
+            "mt5_login": None
         }
         await db.bot_configs.insert_one({**config, "_id": None})
     return {k: v for k, v in config.items() if k != "_id"}
+
+class MT5ConnectRequest(BaseModel):
+    server: str
+    login: str
+    password: str
+
+@api_router.post("/bot/connect-mt5")
+async def connect_mt5(request: MT5ConnectRequest, user: dict = Depends(get_current_user)):
+    """Connect bot to MetaTrader 5"""
+    # In production, this would establish actual MT5 connection
+    # For now, we save the connection details
+    await db.bot_configs.update_one(
+        {"user_id": user["id"]},
+        {
+            "$set": {
+                "mt5_connected": True,
+                "mt5_server": request.server,
+                "mt5_login": request.login,
+                "mt5_connection_time": datetime.now(timezone.utc).isoformat()
+            }
+        },
+        upsert=True
+    )
+    return {"message": "MT5 connection configured", "status": "connected", "server": request.server}
+
+@api_router.post("/bot/disconnect-mt5")
+async def disconnect_mt5(user: dict = Depends(get_current_user)):
+    """Disconnect bot from MetaTrader 5"""
+    await db.bot_configs.update_one(
+        {"user_id": user["id"]},
+        {
+            "$set": {
+                "mt5_connected": False,
+                "mt5_server": None,
+                "mt5_login": None
+            }
+        }
+    )
+    return {"message": "MT5 disconnected", "status": "disconnected"}
 
 @api_router.post("/bot/config")
 async def update_bot_config(config: BotConfig, user: dict = Depends(get_current_user)):
