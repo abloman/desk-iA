@@ -327,7 +327,7 @@ class AlphaMindAPITester:
             self.test_trades()
             self.test_signals()
             self.test_bot_config()
-            self.test_watchlist()
+            self.test_mt5_connection()
             self.test_ai_analysis()  # Last because it's slowest
             
         except Exception as e:
