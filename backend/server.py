@@ -200,20 +200,36 @@ async def fetch_forex_prices():
         }
     return result
 
-async def fetch_stock_prices():
-    """Simulated stock data - in production use yfinance or Alpha Vantage"""
+async def fetch_indices_prices():
+    """Simulated indices data"""
     import random
     base_prices = {
-        "AAPL": 195.50, "GOOGL": 175.20, "MSFT": 420.30, "AMZN": 185.40,
-        "TSLA": 248.50, "NVDA": 875.20, "META": 505.80, "AMD": 165.30
+        "US30": 43250.00, "US100": 21450.00, "US500": 5950.00, 
+        "GER40": 20150.00, "UK100": 8250.00, "FRA40": 7850.00, "JPN225": 38500.00
     }
     result = {}
     for symbol, base in base_prices.items():
-        change = random.uniform(-2, 2)
+        change = random.uniform(-1.5, 1.5)
         result[symbol] = {
             "price": round(base * (1 + change/100), 2),
             "change_24h": round(change, 2),
-            "volume_24h": random.randint(10000000, 50000000)
+            "volume_24h": random.randint(50000000, 200000000)
+        }
+    return result
+
+async def fetch_metals_prices():
+    """Simulated metals data - XAU=Gold, XAG=Silver, XPT=Platinum, XPD=Palladium"""
+    import random
+    base_prices = {
+        "XAU/USD": 2650.50, "XAG/USD": 31.25, "XPT/USD": 985.00, "XPD/USD": 1025.00
+    }
+    result = {}
+    for symbol, base in base_prices.items():
+        change = random.uniform(-1, 1)
+        result[symbol] = {
+            "price": round(base * (1 + change/100), 2),
+            "change_24h": round(change, 2),
+            "volume_24h": random.randint(5000000, 20000000)
         }
     return result
 
