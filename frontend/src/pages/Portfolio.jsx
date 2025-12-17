@@ -1,28 +1,35 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { toast } from "sonner";
 import { 
   Wallet, TrendingUp, TrendingDown, Activity, 
-  DollarSign, Target, Clock, X, Check
+  Target, Clock, X, Check
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger 
-} from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Simple toast
+const showToast = (message, type = 'success') => {
+  const toast = document.createElement('div');
+  toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-sm border ${
+    type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-500' : 'bg-red-500/10 border-red-500/50 text-red-500'
+  } animate-fade-in`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+};
+
 const Portfolio = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [trades, setTrades] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [closeDialog, setCloseDialog] = useState(null);
   const [closePrice, setClosePrice] = useState("");
-  const [closingTrade, setClosingTrade] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -44,15 +51,15 @@ const Portfolio = () => {
   };
 
   const closeTrade = async () => {
-    if (!closingTrade || !closePrice) return;
+    if (!closeDialog || !closePrice) return;
     try {
-      await axios.post(`${API}/trades/${closingTrade.id}/close?exit_price=${closePrice}`);
-      toast.success("Trade clôturé avec succès");
-      setClosingTrade(null);
+      await axios.post(`${API}/trades/${closeDialog.id}/close?exit_price=${closePrice}`);
+      showToast("Trade clôturé avec succès");
+      setCloseDialog(null);
       setClosePrice("");
       fetchData();
     } catch (e) {
-      toast.error("Erreur lors de la clôture");
+      showToast("Erreur lors de la clôture", "error");
     }
   };
 
@@ -67,7 +74,7 @@ const Portfolio = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20"></div>
+        <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20" />
       </div>
     );
   }
@@ -75,7 +82,6 @@ const Portfolio = () => {
   const openTrades = trades.filter(t => t.status === 'open');
   const closedTrades = trades.filter(t => t.status === 'closed');
 
-  // Pie chart data
   const pieData = [
     { name: 'Gagnants', value: closedTrades.filter(t => t.pnl > 0).length, color: '#10B981' },
     { name: 'Perdants', value: closedTrades.filter(t => t.pnl < 0).length, color: '#EF4444' },
@@ -84,6 +90,45 @@ const Portfolio = () => {
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="portfolio-page">
+      {/* Close Trade Modal */}
+      {closeDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-sm p-6 w-full max-w-md mx-4">
+            <h3 className="font-heading font-bold text-lg mb-4">Clôturer la position</h3>
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {closeDialog.symbol} - {closeDialog.direction}
+                </p>
+                <p className="text-sm">
+                  Entry: <span className="font-mono">${closeDialog.entry_price}</span>
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Prix de sortie</label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  placeholder="Ex: 68500"
+                  value={closePrice}
+                  onChange={(e) => setClosePrice(e.target.value)}
+                  className="mt-2"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={closeTrade} className="flex-1">
+                  <Check className="w-4 h-4 mr-2" />
+                  Confirmer
+                </Button>
+                <Button variant="outline" onClick={() => { setCloseDialog(null); setClosePrice(""); }}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <h1 className="font-heading text-2xl font-bold uppercase tracking-tight">Portfolio</h1>
@@ -94,7 +139,7 @@ const Portfolio = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="card-hover" data-testid="stat-balance">
+        <Card className="card-hover">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -110,7 +155,7 @@ const Portfolio = () => {
           </CardContent>
         </Card>
 
-        <Card className="card-hover" data-testid="stat-pnl">
+        <Card className="card-hover">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -134,7 +179,7 @@ const Portfolio = () => {
           </CardContent>
         </Card>
 
-        <Card className="card-hover" data-testid="stat-winrate">
+        <Card className="card-hover">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -150,7 +195,7 @@ const Portfolio = () => {
           </CardContent>
         </Card>
 
-        <Card className="card-hover" data-testid="stat-trades">
+        <Card className="card-hover">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -173,7 +218,7 @@ const Portfolio = () => {
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Open Positions */}
-        <Card className="lg:col-span-2" data-testid="open-positions">
+        <Card className="lg:col-span-2">
           <CardHeader className="border-b border-border pb-4">
             <CardTitle className="font-heading text-sm uppercase tracking-widest flex items-center gap-2">
               <Activity className="w-4 h-4 text-primary" />
@@ -189,7 +234,7 @@ const Portfolio = () => {
             ) : (
               <div className="divide-y divide-border">
                 {openTrades.map((trade) => (
-                  <div key={trade.id} className="p-4 flex items-center justify-between" data-testid={`trade-${trade.id}`}>
+                  <div key={trade.id} className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
                         trade.direction === 'BUY' ? 'signal-buy' : 'signal-sell'
@@ -209,48 +254,13 @@ const Portfolio = () => {
                         <p className="font-mono text-sm">Entry: ${trade.entry_price}</p>
                         <p className="text-xs text-muted-foreground">Qty: {trade.quantity}</p>
                       </div>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => setClosingTrade(trade)}
-                            data-testid={`close-trade-${trade.id}`}
-                          >
-                            Clôturer
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Clôturer la position</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4 pt-4">
-                            <div>
-                              <p className="text-sm text-muted-foreground mb-2">
-                                {trade.symbol} - {trade.direction}
-                              </p>
-                              <p className="text-sm">
-                                Entry: <span className="font-mono">${trade.entry_price}</span>
-                              </p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium">Prix de sortie</label>
-                              <Input
-                                type="number"
-                                step="0.0001"
-                                placeholder="Ex: 68500"
-                                value={closePrice}
-                                onChange={(e) => setClosePrice(e.target.value)}
-                                className="mt-2"
-                              />
-                            </div>
-                            <Button onClick={closeTrade} className="w-full">
-                              <Check className="w-4 h-4 mr-2" />
-                              Confirmer la clôture
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => setCloseDialog(trade)}
+                      >
+                        Clôturer
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -260,7 +270,7 @@ const Portfolio = () => {
         </Card>
 
         {/* Performance Chart */}
-        <Card data-testid="performance-chart">
+        <Card>
           <CardHeader className="border-b border-border pb-4">
             <CardTitle className="font-heading text-sm uppercase tracking-widest">
               Répartition
@@ -302,7 +312,7 @@ const Portfolio = () => {
                 <div className="flex justify-center gap-4 mt-4">
                   {pieData.map((entry) => (
                     <div key={entry.name} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
                       <span className="text-xs text-muted-foreground">{entry.name}: {entry.value}</span>
                     </div>
                   ))}
@@ -314,7 +324,7 @@ const Portfolio = () => {
       </div>
 
       {/* Trade History */}
-      <Card data-testid="trade-history">
+      <Card>
         <CardHeader className="border-b border-border pb-4">
           <CardTitle className="font-heading text-sm uppercase tracking-widest">
             Historique des Trades ({closedTrades.length})
