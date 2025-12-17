@@ -63,7 +63,7 @@ class BotConfig(BaseModel):
     enabled: bool = False
     risk_per_trade: float = 0.02
     max_daily_trades: int = 10
-    allowed_markets: List[str] = ["crypto", "forex", "indices", "metals"]
+    allowed_markets: List[str] = ["crypto", "forex", "indices", "metals", "futures"]
     strategies: List[str] = ["smc", "ict", "wyckoff"]
     auto_execute: bool = False
     mt5_connected: bool = False
@@ -150,7 +150,9 @@ BASE_PRICES = {
     # Indices
     "US30": 44250, "US100": 21650, "US500": 6050, "GER40": 20350, "UK100": 8150,
     # Metals
-    "XAU/USD": 2680, "XAG/USD": 31.50, "XPT/USD": 995, "XPD/USD": 1050
+    "XAU/USD": 2680, "XAG/USD": 31.50, "XPT/USD": 995, "XPD/USD": 1050,
+    # Futures
+    "ES": 6050, "NQ": 21650, "CL": 72.50, "GC": 2680, "SI": 31.50
 }
 
 async def get_current_price(symbol: str) -> float:
@@ -248,6 +250,15 @@ async def get_all_prices() -> Dict[str, Dict]:
             "price": round(base * (1 + random.uniform(-0.15, 0.15) / 100), 2),
             "change_24h": round(random.uniform(-2, 2), 2),
             "type": "metals"
+        }
+    
+    # Futures
+    for symbol in ["ES", "NQ", "CL", "GC", "SI"]:
+        base = BASE_PRICES.get(symbol, 1000)
+        prices[symbol] = {
+            "price": round(base * (1 + random.uniform(-0.2, 0.2) / 100), 2),
+            "change_24h": round(random.uniform(-1.5, 1.5), 2),
+            "type": "futures"
         }
     
     return prices
@@ -637,7 +648,7 @@ async def get_bot_config(user: dict = Depends(get_current_user)):
             "enabled": False,
             "risk_per_trade": 0.02,
             "max_daily_trades": 10,
-            "allowed_markets": ["crypto", "forex", "indices", "metals"],
+            "allowed_markets": ["crypto", "forex", "indices", "metals", "futures"],
             "strategies": ["smc", "ict", "wyckoff"],
             "auto_execute": False,
             "mt5_connected": False

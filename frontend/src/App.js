@@ -203,6 +203,7 @@ const MARKETS = {
   forex: ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CHF"],
   indices: ["US30", "US100", "US500", "GER40", "UK100"],
   metals: ["XAU/USD", "XAG/USD", "XPT/USD", "XPD/USD"],
+  futures: ["ES", "NQ", "CL", "GC", "SI"],
 };
 const TIMEFRAMES = ["5min", "15min", "1h", "4h", "1d"];
 const MODES = ["scalping", "intraday", "swing"];
