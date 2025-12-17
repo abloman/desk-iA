@@ -779,4 +779,185 @@ function Select({ label, value, onChange, options }) {
   );
 }
 
+// ==================== TRADING CHART COMPONENT ====================
+function TradingChartComponent({ symbol, signal, trades = [] }) {
+  const chartContainerRef = useRef(null);
+  const chartRef = useRef(null);
+  const candleSeriesRef = useRef(null);
+  const linesRef = useRef({ entry: null, sl: null, tp: null });
+  const [currentPrice, setCurrentPrice] = useState(null);
+
+  const BASE_PRICES = {
+    'BTC/USD': 87000, 'ETH/USD': 2900, 'SOL/USD': 195, 'XRP/USD': 2.35, 'ADA/USD': 1.05,
+    'EUR/USD': 1.052, 'GBP/USD': 1.268, 'USD/JPY': 154.5, 'AUD/USD': 0.638, 'USD/CHF': 0.892,
+    'US30': 44250, 'US100': 21650, 'US500': 6050, 'GER40': 20350, 'UK100': 8150,
+    'XAU/USD': 2680, 'XAG/USD': 31.5, 'XPT/USD': 995, 'XPD/USD': 1050,
+    'ES': 6050, 'NQ': 21650, 'CL': 72.5, 'GC': 2680, 'SI': 31.5
+  };
+
+  const generateCandleData = useCallback((basePrice, count = 150) => {
+    const data = [];
+    let price = basePrice;
+    const now = Math.floor(Date.now() / 1000);
+    const interval = 900;
+    
+    for (let i = count; i >= 0; i--) {
+      const volatility = basePrice * 0.003;
+      const open = price;
+      const change = (Math.random() - 0.48) * volatility;
+      const high = open + Math.random() * volatility;
+      const low = open - Math.random() * volatility;
+      const close = open + change;
+      
+      data.push({
+        time: now - (i * interval),
+        open: parseFloat(open.toFixed(2)),
+        high: parseFloat(Math.max(high, open, close).toFixed(2)),
+        low: parseFloat(Math.min(low, open, close).toFixed(2)),
+        close: parseFloat(close.toFixed(2)),
+      });
+      price = close;
+    }
+    return data;
+  }, []);
+
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: { background: { type: ColorType.Solid, color: '#0f172a' }, textColor: '#94a3b8' },
+      grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+      width: chartContainerRef.current.clientWidth,
+      height: 400,
+      crosshair: { mode: 1 },
+      rightPriceScale: { borderColor: '#334155' },
+      timeScale: { borderColor: '#334155', timeVisible: true },
+    });
+
+    chartRef.current = chart;
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#10b981', downColor: '#ef4444',
+      borderUpColor: '#10b981', borderDownColor: '#ef4444',
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
+    });
+
+    candleSeriesRef.current = candleSeries;
+
+    const basePrice = BASE_PRICES[symbol] || 100;
+    const data = generateCandleData(basePrice);
+    candleSeries.setData(data);
+    setCurrentPrice(data[data.length - 1].close);
+    chart.timeScale().fitContent();
+
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Real-time updates
+    const interval = setInterval(() => {
+      if (candleSeriesRef.current && data.length > 0) {
+        const lastData = data[data.length - 1];
+        const volatility = basePrice * 0.0008;
+        const newClose = lastData.close + (Math.random() - 0.5) * volatility;
+        
+        const updatedBar = {
+          time: lastData.time,
+          open: lastData.open,
+          high: Math.max(lastData.high, newClose),
+          low: Math.min(lastData.low, newClose),
+          close: parseFloat(newClose.toFixed(2)),
+        };
+        
+        candleSeriesRef.current.update(updatedBar);
+        setCurrentPrice(newClose);
+        data[data.length - 1] = updatedBar;
+      }
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+    };
+  }, [symbol, generateCandleData]);
+
+  // Update price lines when signal changes
+  useEffect(() => {
+    if (!candleSeriesRef.current || !signal) return;
+
+    Object.values(linesRef.current).forEach(line => {
+      if (line) {
+        try { candleSeriesRef.current.removePriceLine(line); } catch(e) {}
+      }
+    });
+
+    if (signal.entry) {
+      linesRef.current.entry = candleSeriesRef.current.createPriceLine({
+        price: signal.entry, color: '#3b82f6', lineWidth: 2,
+        lineStyle: LineStyle.Solid, axisLabelVisible: true, title: 'ENTRY',
+      });
+    }
+
+    if (signal.sl) {
+      linesRef.current.sl = candleSeriesRef.current.createPriceLine({
+        price: signal.sl, color: '#ef4444', lineWidth: 2,
+        lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'SL',
+      });
+    }
+
+    if (signal.tp) {
+      linesRef.current.tp = candleSeriesRef.current.createPriceLine({
+        price: signal.tp, color: '#10b981', lineWidth: 2,
+        lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: 'TP',
+      });
+    }
+  }, [signal]);
+
+  const fmt = (n) => {
+    if (!n) return "-";
+    return n < 10 ? n.toFixed(4) : n.toFixed(2);
+  };
+
+  return (
+    <div className="relative w-full">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-3">
+          <span className="text-lg font-bold text-white">{symbol}</span>
+          {currentPrice && (
+            <span className="text-xl font-mono text-sky-400">{fmt(currentPrice)}</span>
+          )}
+        </div>
+        {signal && (
+          <div className="flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1">
+              <span className="w-4 h-0.5 bg-blue-500"></span>
+              Entry: <span className="font-mono text-white">{fmt(signal.entry)}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-4 h-0.5 bg-red-500 border-dashed"></span>
+              SL: <span className="font-mono text-red-400">{fmt(signal.sl)}</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-4 h-0.5 bg-green-500 border-dashed"></span>
+              TP: <span className="font-mono text-green-400">{fmt(signal.tp)}</span>
+            </span>
+          </div>
+        )}
+      </div>
+      <div ref={chartContainerRef} className="w-full rounded-lg overflow-hidden" />
+      <div className="flex items-center justify-center gap-6 mt-2 text-[10px] text-slate-400">
+        <span>🟢 Bullish</span>
+        <span>🔴 Bearish</span>
+        <span>🔵 Entry</span>
+        <span className="text-red-400">--- SL</span>
+        <span className="text-green-400">--- TP</span>
+      </div>
+    </div>
+  );
+}
+
 export default App;
