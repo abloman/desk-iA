@@ -207,7 +207,13 @@ const MARKETS = {
 };
 const TIMEFRAMES = ["5min", "15min", "1h", "4h", "1d"];
 const MODES = ["scalping", "intraday", "swing"];
-const STRATEGIES = ["smc", "ict", "wyckoff", "macd", "rsi", "breakout", "momentum", "vwap"];
+const STRATEGIES = [
+  { id: "smc_ict_advanced", name: "SMC/ICT Avancée" },
+  { id: "market_structure", name: "Market Structure Avancé" },
+  { id: "orderblock", name: "Order Block + Imbalances" },
+  { id: "ma_advanced", name: "Moyenne Mobile Avancé" },
+  { id: "opr", name: "OPR (Opening Range)" }
+];
 
 function TradingPage() {
   const [portfolio, setPortfolio] = useState({ balance: 10000, total_pnl: 0, win_rate: 0 });
