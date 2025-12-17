@@ -269,17 +269,27 @@ async def get_price(symbol: str, user: dict = Depends(get_current_user)):
 def calculate_levels(price: float, direction: str, strategy: str, symbol: str):
     """Calculate entry, SL, TP based on strategy and market type"""
     
-    # Determine pip value based on symbol
+    # Determine pip/point value based on symbol
     if "JPY" in symbol:
         pip = 0.01
-    elif any(x in symbol for x in ["EUR", "GBP", "AUD", "USD", "CHF", "NZD", "CAD"]) and "/" in symbol:
+    elif any(x in symbol for x in ["EUR", "GBP", "AUD", "CHF", "NZD", "CAD"]) and "/" in symbol and "USD" in symbol:
         pip = 0.0001
-    elif any(x in symbol for x in ["XAU", "XAG"]):
-        pip = 0.01
-    elif any(x in symbol for x in ["US30", "US100", "US500", "GER", "UK", "FRA", "JPN"]):
-        pip = 1
+    elif "XAU" in symbol:
+        pip = 0.10  # Gold moves in 10 cents
+    elif "XAG" in symbol:
+        pip = 0.01  # Silver moves in 1 cent
+    elif any(x in symbol for x in ["US30", "US100", "US500"]):
+        pip = 1.0  # Indices move in points
+    elif any(x in symbol for x in ["GER", "UK", "FRA", "JPN"]):
+        pip = 1.0
+    elif "BTC" in symbol:
+        pip = price * 0.001  # 0.1% of price for BTC (~100$ for BTC at 100k)
+    elif "ETH" in symbol:
+        pip = price * 0.002  # 0.2% for ETH
+    elif "SOL" in symbol or "XRP" in symbol or "ADA" in symbol:
+        pip = price * 0.005  # 0.5% for altcoins
     else:
-        pip = price * 0.001  # 0.1% for crypto
+        pip = price * 0.002  # Default 0.2%
     
     # Strategy-specific parameters
     strategy_params = {
