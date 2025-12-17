@@ -159,8 +159,10 @@ class AlphaMindAPITester:
         
         analysis_data = {
             "symbol": "BTC/USD",
-            "timeframe": "1h",
-            "market_type": "crypto"
+            "timeframe": "15min",
+            "market_type": "crypto",
+            "mode": "intraday",
+            "strategy": "smc"
         }
         
         # Note: This might take longer due to Claude API call
@@ -175,6 +177,31 @@ class AlphaMindAPITester:
         
         if success:
             print(f"   Analysis completed for {response.get('symbol', 'unknown')}")
+            if 'analysis' in response:
+                analysis = response['analysis']
+                print(f"   Signal: {analysis.get('signal', 'N/A')}")
+                print(f"   Confidence: {analysis.get('confidence', 'N/A')}%")
+                print(f"   Entry: {analysis.get('entry_price', 'N/A')}")
+        
+        # Test Futures market analysis
+        futures_data = {
+            "symbol": "ES",
+            "timeframe": "15min", 
+            "market_type": "futures",
+            "mode": "intraday",
+            "strategy": "ict"
+        }
+        
+        success, response = self.run_test(
+            "AI Analysis (ES Futures)", 
+            "POST", 
+            "ai/analyze", 
+            200, 
+            futures_data
+        )
+        
+        if success:
+            print(f"   Futures analysis completed for {response.get('symbol', 'unknown')}")
 
     def test_signals(self):
         """Test signals endpoints"""
