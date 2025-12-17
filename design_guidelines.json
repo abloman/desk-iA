@@ -1,0 +1,161 @@
+{
+  "design_system": {
+    "identity": {
+      "name": "E1_QUANT_TERMINAL",
+      "archetype": "The Architect",
+      "vibe": "Precision, Speed, Authority",
+      "theme_mode": "dark"
+    },
+    "typography": {
+      "fonts": {
+        "headings": {
+          "family": "Chivo",
+          "weights": ["700", "900"],
+          "usage": "Page titles, Widget headers, Key metrics"
+        },
+        "body": {
+          "family": "IBM Plex Sans",
+          "weights": ["400", "500", "600"],
+          "usage": "General text, Labels, Navigation"
+        },
+        "mono": {
+          "family": "JetBrains Mono",
+          "weights": ["400", "500"],
+          "usage": "Prices, PnL, Timestamps, Code snippets"
+        }
+      },
+      "rules": {
+        "headings": "tracking-tight leading-none uppercase",
+        "subheadings": "tracking-widest uppercase text-xs font-bold text-muted-foreground",
+        "numbers": "font-mono tracking-tight tabular-nums"
+      }
+    },
+    "colors": {
+      "palette": {
+        "background": "#050505",
+        "foreground": "#FAFAFA",
+        "card": "#0A0B0E",
+        "card_foreground": "#FAFAFA",
+        "primary": "#6366f1",
+        "primary_foreground": "#FFFFFF",
+        "secondary": "#18181b",
+        "secondary_foreground": "#FAFAFA",
+        "muted": "#27272a",
+        "muted_foreground": "#a1a1aa",
+        "accent": "#27272a",
+        "accent_foreground": "#FAFAFA",
+        "destructive": "#EF4444",
+        "destructive_foreground": "#FFFFFF",
+        "border": "#27272a",
+        "input": "#27272a",
+        "ring": "#6366f1",
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "info": "#3B82F6"
+      },
+      "gradients": {
+        "profit": "linear-gradient(to right, #10B981, #059669)",
+        "loss": "linear-gradient(to right, #EF4444, #DC2626)",
+        "brand": "linear-gradient(to right, #6366f1, #8B5CF6)"
+      }
+    },
+    "layout": {
+      "grid_system": "The Control Room",
+      "spacing": {
+        "container_padding": "p-4 md:p-6 lg:p-8",
+        "widget_gap": "gap-4",
+        "internal_padding": "p-4"
+      },
+      "border_radius": {
+        "card": "rounded-sm",
+        "button": "rounded-sm",
+        "input": "rounded-sm"
+      }
+    },
+    "visual_enhancers": {
+      "glassmorphism": {
+        "header": "bg-black/50 backdrop-blur-xl border-b border-white/10",
+        "overlay": "bg-black/80 backdrop-blur-sm"
+      },
+      "borders": {
+        "default": "border border-white/10",
+        "active": "border border-primary/50 shadow-[0_0_15px_rgba(99,102,241,0.3)]",
+        "tracing_beam": "relative overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-primary/50 before:to-transparent before:animate-shimmer"
+      },
+      "shadows": {
+        "card": "shadow-none",
+        "hover": "shadow-lg shadow-black/50"
+      }
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 rounded-sm font-medium tracking-wide uppercase text-xs px-6 py-2 transition-all active:scale-95",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-sm font-medium tracking-wide uppercase text-xs px-6 py-2",
+      "outline": "border border-input bg-transparent hover:bg-accent hover:text-accent-foreground rounded-sm font-medium tracking-wide uppercase text-xs px-6 py-2",
+      "ghost": "hover:bg-accent hover:text-accent-foreground rounded-sm font-medium tracking-wide uppercase text-xs px-4 py-2"
+    },
+    "cards": {
+      "default": "bg-card text-card-foreground border border-border rounded-sm p-0 overflow-hidden",
+      "interactive": "bg-card text-card-foreground border border-border rounded-sm p-0 hover:border-primary/50 transition-colors cursor-pointer"
+    },
+    "inputs": {
+      "default": "flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+    }
+  },
+  "image_urls": {
+    "backgrounds": {
+      "login_hero": "https://images.unsplash.com/photo-1591911913225-b4f65b23a475?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "abstract_texture": "https://images.unsplash.com/photo-1657215374276-34ff9a2882cb?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    "avatars": {
+      "user_default": "https://images.unsplash.com/photo-1626913671142-8a2431ab5219?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "trader_1": "https://images.unsplash.com/photo-1709553829044-a18f76de835f?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    "markets": {
+      "bitcoin": "https://images.unsplash.com/photo-1617854547935-eca137ad5466?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "bull_market": "https://images.unsplash.com/photo-1576787498994-63269e082a29?crop=entropy&cs=srgb&fm=jpg&q=85"
+    }
+  },
+  "instructions_to_main_agent": {
+    "setup": [
+      "Install fonts: Chivo, IBM Plex Sans, JetBrains Mono via Google Fonts or Fontsource.",
+      "Update tailwind.config.js with the custom colors defined in 'colors.palette'.",
+      "Override index.css :root variables to match the dark mode palette PERMANENTLY (force dark mode).",
+      "Install 'lucide-react' for icons.",
+      "Install 'recharts' for charts (do not use D3 unless absolutely necessary for complex visualizations)."
+    ],
+    "layout_strategy": [
+      "Use the 'Control Room' grid for the dashboard: dense, minimal gaps, high information density.",
+      "Ensure all financial data (prices, PnL) uses 'font-mono' and 'tabular-nums'.",
+      "Use 'text-green-500' for positive values and 'text-red-500' for negative values.",
+      "Do not use standard scrollbars. Use 'tailwind-scrollbar' or custom CSS to make them thin and dark."
+    ],
+    "component_overrides": [
+      "Shadcn Card: Remove default shadow, add 1px border.",
+      "Shadcn Button: Make them uppercase and tracking-wide.",
+      "Shadcn Input: Remove heavy rings, use subtle borders."
+    ]
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: 'transition: all'. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add '.App { text-align: center; }' in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use 'sonner' for toasts. Sonner component are located in '/app/src/components/ui/sonner.tsx'"
+  ]
+}
