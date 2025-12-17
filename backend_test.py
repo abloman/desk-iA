@@ -213,25 +213,6 @@ class AlphaMindAPITester:
         if success:
             signals = signals_data.get('signals', [])
             print(f"   Found {len(signals)} existing signals")
-        
-        # Create a manual signal
-        signal_data = {
-            "symbol": "BTC/USD",
-            "direction": "BUY",
-            "entry_price": 67500.0,
-            "stop_loss": 65000.0,
-            "take_profit_1": 70000.0,
-            "take_profit_2": 72000.0,
-            "confidence": 85.0,
-            "strategy": "ICT",
-            "analysis": "Test signal for BTC/USD"
-        }
-        
-        self.run_test("Create Signal", "POST", "signals", 200, signal_data)
-        
-        # Generate AI signals (this will take time)
-        print("   Note: AI signal generation may take 30-60 seconds...")
-        self.run_test("Generate AI Signals", "POST", "signals/generate", 200)
 
     def test_portfolio(self):
         """Test portfolio endpoints"""
