@@ -146,7 +146,8 @@ async def get_me(user: dict = Depends(get_current_user)):
 
 CRYPTO_SYMBOLS = ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "ADA/USD", "DOGE/USD", "AVAX/USD", "DOT/USD"]
 FOREX_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD", "USD/CAD", "NZD/USD"]
-STOCK_SYMBOLS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "AMD"]
+INDICES_SYMBOLS = ["US30", "US100", "US500", "GER40", "UK100", "FRA40", "JPN225"]
+METALS_SYMBOLS = ["XAU/USD", "XAG/USD", "XPT/USD", "XPD/USD"]
 
 async def fetch_crypto_prices():
     """Fetch crypto prices from CoinGecko API"""
