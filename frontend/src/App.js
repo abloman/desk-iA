@@ -226,11 +226,11 @@ function TradingPage() {
   const [symbol, setSymbol] = useState("BTC/USD");
   const [timeframe, setTimeframe] = useState("15min");
   const [mode, setMode] = useState("intraday");
-  const [strategy, setStrategy] = useState("smc");
+  const [strategy, setStrategy] = useState("smc_ict_advanced");
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 2000); // Faster refresh for live PnL
     return () => clearInterval(interval);
   }, []);
 
