@@ -237,15 +237,18 @@ async def fetch_metals_prices():
 async def get_markets(user: dict = Depends(get_current_user)):
     crypto = await fetch_crypto_prices()
     forex = await fetch_forex_prices()
-    stocks = await fetch_stock_prices()
+    indices = await fetch_indices_prices()
+    metals = await fetch_metals_prices()
     
     markets = []
     for symbol, data in crypto.items():
         markets.append({"symbol": symbol, "type": "crypto", **data})
     for symbol, data in forex.items():
         markets.append({"symbol": symbol, "type": "forex", **data})
-    for symbol, data in stocks.items():
-        markets.append({"symbol": symbol, "type": "stocks", **data})
+    for symbol, data in indices.items():
+        markets.append({"symbol": symbol, "type": "indices", **data})
+    for symbol, data in metals.items():
+        markets.append({"symbol": symbol, "type": "metals", **data})
     
     return {"markets": markets, "updated_at": datetime.now(timezone.utc).isoformat()}
 
