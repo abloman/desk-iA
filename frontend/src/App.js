@@ -789,7 +789,7 @@ function TradingChartComponent({ symbol, signal, trades = [] }) {
   const [currentPrice, setCurrentPrice] = useState(null);
 
   const BASE_PRICES = {
-    'BTC/USD': 87000, 'ETH/USD': 2900, 'SOL/USD': 195, 'XRP/USD': 2.35, 'ADA/USD': 1.05,
+    'BTC/USD': 98500, 'ETH/USD': 3450, 'SOL/USD': 195, 'XRP/USD': 2.35, 'ADA/USD': 1.05,
     'EUR/USD': 1.052, 'GBP/USD': 1.268, 'USD/JPY': 154.5, 'AUD/USD': 0.638, 'USD/CHF': 0.892,
     'US30': 44250, 'US100': 21650, 'US500': 6050, 'GER40': 20350, 'UK100': 8150,
     'XAU/USD': 2680, 'XAG/USD': 31.5, 'XPT/USD': 995, 'XPD/USD': 1050,
