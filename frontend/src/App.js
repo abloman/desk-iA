@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from "react";
 import "@/App.css";
 import axios from "axios";
-import { createChart, ColorType, LineStyle } from "lightweight-charts";
+import { createChart, ColorType, LineStyle, CandlestickSeries, AreaSeries } from "lightweight-charts";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
