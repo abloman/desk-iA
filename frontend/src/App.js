@@ -336,23 +336,12 @@ function TradingPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {/* Chart */}
-        <div className="col-span-2 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-          <div className="p-2 border-b border-slate-800 flex justify-between items-center">
-            <span className="text-sm text-slate-400">TradingView - {symbol}</span>
-            {signal && (
-              <div className="flex gap-2 text-xs">
-                <span className="px-2 py-1 bg-slate-800 rounded">Entry: {fmt(signal.entry, 4)}</span>
-                <span className="px-2 py-1 bg-red-900/50 rounded text-red-300">SL: {fmt(signal.sl, 4)}</span>
-                <span className="px-2 py-1 bg-emerald-900/50 rounded text-emerald-300">TP: {fmt(signal.tp, 4)}</span>
-              </div>
-            )}
-          </div>
-          <iframe
-            key={tvSymbol}
-            src={`https://s.tradingview.com/widgetembed/?symbol=${tvSymbol}&interval=15&theme=dark&style=1&timezone=Europe/Paris&locale=fr`}
-            className="w-full h-96"
-            title="chart"
+        {/* Chart with Entry/SL/TP Lines */}
+        <div className="col-span-2 bg-slate-900 rounded-xl border border-slate-800 p-4">
+          <TradingChartComponent 
+            symbol={symbol} 
+            signal={signal} 
+            trades={openTrades}
           />
         </div>
 
