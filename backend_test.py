@@ -77,35 +77,14 @@ class AlphaMindAPITester:
         """Test authentication flow"""
         print("\n🔍 Testing Authentication...")
         
-        # Test registration
-        test_email = f"test_{datetime.now().strftime('%H%M%S')}@alphamind.com"
-        register_data = {
-            "email": test_email,
-            "password": "test123",
-            "name": "Test User"
-        }
-        
-        success, response = self.run_test(
-            "User Registration", 
-            "POST", 
-            "auth/register", 
-            200, 
-            register_data
-        )
-        
-        if success and 'token' in response:
-            self.token = response['token']
-            self.user_id = response['user']['id']
-            print(f"   Token obtained: {self.token[:20]}...")
-        
-        # Test login with provided credentials
+        # Test login with provided credentials first
         login_data = {
-            "email": "trader@test.com",
-            "password": "test123"
+            "email": "newtrader2024@test.com",
+            "password": "password123"
         }
         
         success, response = self.run_test(
-            "User Login (Test Credentials)", 
+            "User Login (Provided Credentials)", 
             "POST", 
             "auth/login", 
             200, 
@@ -115,7 +94,28 @@ class AlphaMindAPITester:
         if success and 'token' in response:
             self.token = response['token']
             self.user_id = response['user']['id']
-            print(f"   Using test credentials token: {self.token[:20]}...")
+            print(f"   Using provided credentials token: {self.token[:20]}...")
+        else:
+            # Fallback: Test registration with new user
+            test_email = f"test_{datetime.now().strftime('%H%M%S')}@alphamind.com"
+            register_data = {
+                "email": test_email,
+                "password": "test123",
+                "name": "Test User"
+            }
+            
+            success, response = self.run_test(
+                "User Registration (Fallback)", 
+                "POST", 
+                "auth/register", 
+                200, 
+                register_data
+            )
+            
+            if success and 'token' in response:
+                self.token = response['token']
+                self.user_id = response['user']['id']
+                print(f"   Token obtained via registration: {self.token[:20]}...")
         
         # Test get current user
         if self.token:
