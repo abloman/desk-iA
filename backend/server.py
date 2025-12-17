@@ -710,6 +710,89 @@ async def get_portfolio(user: dict = Depends(get_current_user)):
         "closed_trades": len(closed_trades)
     }
 
+@api_router.get("/portfolio/equity-curve")
+async def get_equity_curve(user: dict = Depends(get_current_user)):
+    """Get equity curve data for chart"""
+    trades = await db.trades.find(
+        {"user_id": user["id"], "status": "closed"}, 
+        {"_id": 0}
+    ).sort("closed_at", 1).to_list(1000)
+    
+    equity_data = []
+    cumulative_pnl = 0
+    initial_balance = 10000
+    
+    for trade in trades:
+        cumulative_pnl += trade.get("pnl", 0)
+        equity_data.append({
+            "timestamp": trade.get("closed_at", trade.get("created_at")),
+            "pnl": trade.get("pnl", 0),
+            "cumulative_pnl": round(cumulative_pnl, 2),
+            "equity": round(initial_balance + cumulative_pnl, 2),
+            "symbol": trade.get("symbol"),
+            "strategy": trade.get("strategy")
+        })
+    
+    return {"equity_curve": equity_data, "final_equity": round(initial_balance + cumulative_pnl, 2)}
+
+@api_router.get("/portfolio/strategy-stats")
+async def get_strategy_stats(user: dict = Depends(get_current_user)):
+    """Get performance statistics by strategy"""
+    trades = await db.trades.find(
+        {"user_id": user["id"], "status": "closed"}, 
+        {"_id": 0}
+    ).to_list(1000)
+    
+    strategy_stats = {}
+    
+    for trade in trades:
+        strat = trade.get("strategy", "unknown")
+        if strat not in strategy_stats:
+            strategy_stats[strat] = {
+                "total_trades": 0,
+                "winning_trades": 0,
+                "total_pnl": 0,
+                "avg_pnl": 0,
+                "max_win": 0,
+                "max_loss": 0
+            }
+        
+        stats = strategy_stats[strat]
+        stats["total_trades"] += 1
+        pnl = trade.get("pnl", 0)
+        stats["total_pnl"] += pnl
+        
+        if pnl > 0:
+            stats["winning_trades"] += 1
+            stats["max_win"] = max(stats["max_win"], pnl)
+        else:
+            stats["max_loss"] = min(stats["max_loss"], pnl)
+    
+    # Calculate averages and win rates
+    result = []
+    for strat, stats in strategy_stats.items():
+        if stats["total_trades"] > 0:
+            stats["avg_pnl"] = round(stats["total_pnl"] / stats["total_trades"], 2)
+            stats["win_rate"] = round((stats["winning_trades"] / stats["total_trades"]) * 100, 2)
+            stats["total_pnl"] = round(stats["total_pnl"], 2)
+            stats["strategy"] = strat
+            stats["strategy_name"] = ADVANCED_STRATEGIES.get(strat, {}).get("name", strat.upper())
+            result.append(stats)
+    
+    # Sort by total PnL
+    result.sort(key=lambda x: x["total_pnl"], reverse=True)
+    
+    return {"strategy_stats": result}
+
+@api_router.delete("/portfolio/clear-history")
+async def clear_trade_history(user: dict = Depends(get_current_user)):
+    """Clear all trade history and reset balance"""
+    await db.trades.delete_many({"user_id": user["id"]})
+    await db.signals.delete_many({"user_id": user["id"]})
+    await db.users.update_one({"id": user["id"]}, {"$set": {"balance": 10000}})
+    
+    return {"message": "Historique effacé", "new_balance": 10000}
+
 # ==================== BOT CONFIG ====================
 
 @api_router.get("/bot/config")
