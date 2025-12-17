@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { toast } from "sonner";
 import { 
   Signal, TrendingUp, TrendingDown, Clock, Target, 
   ShieldAlert, Zap, RefreshCw, Check, X
@@ -11,6 +10,17 @@ import { Badge } from "../components/ui/badge";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Simple toast
+const showToast = (message, type = 'success') => {
+  const toast = document.createElement('div');
+  toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-sm border ${
+    type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-500' : 'bg-red-500/10 border-red-500/50 text-red-500'
+  } animate-fade-in`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+};
 
 const Signals = () => {
   const [signals, setSignals] = useState([]);
@@ -37,9 +47,9 @@ const Signals = () => {
     try {
       const res = await axios.post(`${API}/signals/generate`);
       setSignals([...res.data.signals, ...signals]);
-      toast.success(`${res.data.count} nouveaux signaux générés`);
+      showToast(`${res.data.count} nouveaux signaux générés`);
     } catch (e) {
-      toast.error("Erreur lors de la génération");
+      showToast("Erreur lors de la génération", "error");
     } finally {
       setGenerating(false);
     }
@@ -56,9 +66,9 @@ const Signals = () => {
         stop_loss: signal.stop_loss,
         take_profit: signal.take_profit_1
       });
-      toast.success(`Trade ${signal.direction} exécuté sur ${signal.symbol}`);
+      showToast(`Trade ${signal.direction} exécuté sur ${signal.symbol}`);
     } catch (e) {
-      toast.error("Erreur lors de l'exécution");
+      showToast("Erreur lors de l'exécution", "error");
     }
   };
 
@@ -71,7 +81,7 @@ const Signals = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20"></div>
+        <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20" />
       </div>
     );
   }
@@ -178,7 +188,7 @@ const Signals = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {signals.map((signal) => (
             <Card key={signal.id} className="card-hover overflow-hidden" data-testid={`signal-${signal.id}`}>
-              <div className={`h-1 ${signal.direction === 'BUY' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <div className={`h-1 ${signal.direction === 'BUY' ? 'bg-green-500' : 'bg-red-500'}`} />
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
