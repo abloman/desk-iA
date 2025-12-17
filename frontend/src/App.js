@@ -355,7 +355,7 @@ function TradingPage() {
           <h2 className="text-blue-400 font-semibold">Contrôles IA</h2>
           
           <Select label="Marché" value={market} onChange={setMarket} options={[
-            {v: "crypto", l: "Crypto"}, {v: "forex", l: "Forex"}, {v: "indices", l: "Indices"}, {v: "metals", l: "Métaux"}
+            {v: "crypto", l: "₿ Crypto"}, {v: "forex", l: "💱 Forex"}, {v: "indices", l: "📈 Indices"}, {v: "metals", l: "🥇 Métaux"}, {v: "futures", l: "📊 Futures"}
           ]} />
           <Select label="Symbole" value={symbol} onChange={setSymbol} options={MARKETS[market].map(s => ({v: s, l: s}))} />
           
