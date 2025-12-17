@@ -68,9 +68,12 @@ class BotConfig(BaseModel):
     enabled: bool
     risk_per_trade: float = 0.02
     max_daily_trades: int = 10
-    allowed_markets: List[str] = ["crypto", "forex", "stocks"]
+    allowed_markets: List[str] = ["crypto", "forex", "indices", "metals"]
     strategies: List[str] = ["ICT", "SMC", "WYCKOFF"]
     auto_execute: bool = False
+    mt5_connected: bool = False
+    mt5_server: Optional[str] = None
+    mt5_login: Optional[str] = None
 
 class AIAnalysisRequest(BaseModel):
     symbol: str
