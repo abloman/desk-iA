@@ -441,10 +441,10 @@ function TradingPage() {
                   <td className={`py-2 text-right font-mono font-bold ${(t.floating_pnl || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                     {fmt(t.floating_pnl)}$
                   </td>
-                  <td className="py-2 text-right space-x-1">
-                    <button onClick={() => closeTrade(t.id, "market")} className="px-2 py-1 bg-blue-600 rounded text-xs">Market</button>
-                    <button onClick={() => closeTrade(t.id, "sl")} className="px-2 py-1 bg-red-600 rounded text-xs">SL</button>
-                    <button onClick={() => closeTrade(t.id, "tp")} className="px-2 py-1 bg-emerald-600 rounded text-xs">TP</button>
+                  <td className="py-2 text-right">
+                    <button onClick={() => closeTrade(t.id, "market")} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs font-semibold">
+                      Fermer
+                    </button>
                   </td>
                 </tr>
               ))}
