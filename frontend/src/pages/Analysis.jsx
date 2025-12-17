@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { 
   Brain, Search, Loader2, TrendingUp, TrendingDown, 
@@ -9,13 +8,21 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { 
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
-} from "../components/ui/select";
 import { Badge } from "../components/ui/badge";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Simple toast
+const showToast = (message, type = 'success') => {
+  const toast = document.createElement('div');
+  toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-sm border ${
+    type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-500' : 'bg-red-500/10 border-red-500/50 text-red-500'
+  } animate-fade-in`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+};
 
 const Analysis = () => {
   const [searchParams] = useSearchParams();
@@ -31,12 +38,13 @@ const Analysis = () => {
   const popularSymbols = {
     crypto: ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"],
     forex: ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD"],
-    stocks: ["AAPL", "GOOGL", "MSFT", "TSLA"]
+    indices: ["US30", "US100", "US500", "GER40"],
+    metals: ["XAU/USD", "XAG/USD", "XPT/USD", "XPD/USD"]
   };
 
   const analyzeSymbol = async () => {
     if (!symbol) {
-      toast.error("Veuillez entrer un symbole");
+      showToast("Veuillez entrer un symbole", "error");
       return;
     }
     
@@ -51,9 +59,9 @@ const Analysis = () => {
       });
       setAnalysis(res.data);
       setHistory([res.data, ...history.slice(0, 4)]);
-      toast.success("Analyse terminée");
+      showToast("Analyse terminée");
     } catch (e) {
-      toast.error("Erreur lors de l'analyse");
+      showToast("Erreur lors de l'analyse", "error");
       console.error("Analysis error:", e);
     } finally {
       setLoading(false);
@@ -88,15 +96,15 @@ const Analysis = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Ex: BTC/USD, EUR/USD, AAPL"
+                  placeholder="Ex: BTC/USD, EUR/USD, XAU/USD"
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value.toUpperCase())}
                   className="pl-10"
                   data-testid="symbol-input"
                 />
               </div>
-              <div className="flex gap-2 mt-2">
-                {popularSymbols[marketType].map((s) => (
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {popularSymbols[marketType]?.map((s) => (
                   <button
                     key={s}
                     onClick={() => setSymbol(s)}
@@ -112,33 +120,34 @@ const Analysis = () => {
               <label className="text-xs text-muted-foreground uppercase tracking-widest mb-2 block">
                 Type de marché
               </label>
-              <Select value={marketType} onValueChange={setMarketType}>
-                <SelectTrigger data-testid="market-type-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="crypto">Crypto</SelectItem>
-                  <SelectItem value="forex">Forex</SelectItem>
-                  <SelectItem value="stocks">Actions</SelectItem>
-                </SelectContent>
-              </Select>
+              <select 
+                value={marketType} 
+                onChange={(e) => setMarketType(e.target.value)}
+                className="w-full h-10 px-3 rounded-sm border border-border bg-background text-sm"
+                data-testid="market-type-select"
+              >
+                <option value="crypto">Crypto</option>
+                <option value="forex">Forex</option>
+                <option value="indices">Indices</option>
+                <option value="metals">Métaux</option>
+              </select>
             </div>
 
             <div>
               <label className="text-xs text-muted-foreground uppercase tracking-widest mb-2 block">
                 Timeframe
               </label>
-              <Select value={timeframe} onValueChange={setTimeframe}>
-                <SelectTrigger data-testid="timeframe-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="15m">15 minutes</SelectItem>
-                  <SelectItem value="1h">1 heure</SelectItem>
-                  <SelectItem value="4h">4 heures</SelectItem>
-                  <SelectItem value="1d">1 jour</SelectItem>
-                </SelectContent>
-              </Select>
+              <select 
+                value={timeframe} 
+                onChange={(e) => setTimeframe(e.target.value)}
+                className="w-full h-10 px-3 rounded-sm border border-border bg-background text-sm"
+                data-testid="timeframe-select"
+              >
+                <option value="15m">15 minutes</option>
+                <option value="1h">1 heure</option>
+                <option value="4h">4 heures</option>
+                <option value="1d">1 jour</option>
+              </select>
             </div>
           </div>
 
@@ -277,7 +286,6 @@ const Analysis = () => {
             <CardContent className="pt-4 space-y-4">
               {analysis.analysis.analysis ? (
                 <>
-                  {/* ICT Analysis */}
                   <div className="p-3 rounded bg-orange-500/5 border border-orange-500/20">
                     <p className="text-xs text-orange-500 font-medium mb-2">ICT</p>
                     <p className="text-sm text-muted-foreground">
@@ -285,7 +293,6 @@ const Analysis = () => {
                     </p>
                   </div>
 
-                  {/* SMC Analysis */}
                   <div className="p-3 rounded bg-blue-500/5 border border-blue-500/20">
                     <p className="text-xs text-blue-500 font-medium mb-2">SMC</p>
                     <p className="text-sm text-muted-foreground">
@@ -293,7 +300,6 @@ const Analysis = () => {
                     </p>
                   </div>
 
-                  {/* Wyckoff Analysis */}
                   <div className="p-3 rounded bg-purple-500/5 border border-purple-500/20">
                     <p className="text-xs text-purple-500 font-medium mb-2">Wyckoff</p>
                     <p className="text-sm text-muted-foreground">
@@ -301,7 +307,6 @@ const Analysis = () => {
                     </p>
                   </div>
 
-                  {/* Trend */}
                   {analysis.analysis.analysis.trend && (
                     <div className="p-3 rounded bg-muted/50">
                       <p className="text-xs text-muted-foreground mb-2">Tendance</p>
@@ -314,7 +319,6 @@ const Analysis = () => {
                     </div>
                   )}
 
-                  {/* Key Levels */}
                   {analysis.analysis.analysis.key_levels && (
                     <div className="p-3 rounded bg-muted/50">
                       <p className="text-xs text-muted-foreground mb-2">Niveaux clés</p>
