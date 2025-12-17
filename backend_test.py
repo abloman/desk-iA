@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class AlphaMindAPITester:
-    def __init__(self, base_url="https://trade-flow-connect.preview.emergentagent.com"):
+    def __init__(self, base_url="https://alphamind-trader.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.token = None
