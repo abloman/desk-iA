@@ -1,8 +1,7 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import axios from "axios";
-import { Toaster } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -17,16 +16,14 @@ const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-      fetchUser();
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setUser(null);
+    delete axios.defaults.headers.common["Authorization"];
+  }, []);
 
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/auth/me`);
       setUser(res.data);
@@ -35,7 +32,16 @@ const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [logout]);
+
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      fetchUser();
+    } else {
+      setLoading(false);
+    }
+  }, [token, fetchUser]);
 
   const login = async (email, password) => {
     const res = await axios.post(`${API}/auth/login`, { email, password });
@@ -53,13 +59,6 @@ const AuthProvider = ({ children }) => {
     return res.data;
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
-    delete axios.defaults.headers.common["Authorization"];
-  };
-
   return (
     <AuthContext.Provider value={{ user, token, login, register, logout, loading, setUser }}>
       {children}
@@ -67,7 +66,7 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-// Components - imports at top level
+// Components
 import Dashboard from "./pages/Dashboard";
 import Markets from "./pages/Markets";
 import Signals from "./pages/Signals";
@@ -80,7 +79,7 @@ import Header from "./components/Header";
 
 const LoadingScreen = () => (
   <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20"></div>
+    <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20" />
   </div>
 );
 
@@ -95,10 +94,10 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
   
-  return <>{children}</>;
+  return children;
 };
 
-const Layout = ({ children }) => {
+const AppLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
   return (
@@ -114,51 +113,45 @@ const Layout = ({ children }) => {
   );
 };
 
-// Page wrapper to avoid re-mounting Layout
-const ProtectedPage = ({ component: Component }) => {
-  return (
-    <ProtectedRoute>
-      <Layout>
-        <Component />
-      </Layout>
-    </ProtectedRoute>
-  );
-};
-
-function AppRoutes() {
-  return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/" element={<ProtectedPage component={Dashboard} />} />
-      <Route path="/markets" element={<ProtectedPage component={Markets} />} />
-      <Route path="/signals" element={<ProtectedPage component={Signals} />} />
-      <Route path="/portfolio" element={<ProtectedPage component={Portfolio} />} />
-      <Route path="/bot" element={<ProtectedPage component={Bot} />} />
-      <Route path="/analysis" element={<ProtectedPage component={Analysis} />} />
-    </Routes>
-  );
-}
-
 function App() {
   return (
-    <>
-      <Toaster 
-        position="top-right" 
-        richColors 
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: 'hsl(0 0% 4%)',
-            border: '1px solid hsl(0 0% 15%)',
-          }
-        }}
-      />
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </AuthProvider>
-    </>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={
+            <ProtectedRoute>
+              <AppLayout><Dashboard /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/markets" element={
+            <ProtectedRoute>
+              <AppLayout><Markets /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/signals" element={
+            <ProtectedRoute>
+              <AppLayout><Signals /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/portfolio" element={
+            <ProtectedRoute>
+              <AppLayout><Portfolio /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/bot" element={
+            <ProtectedRoute>
+              <AppLayout><Bot /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/analysis" element={
+            <ProtectedRoute>
+              <AppLayout><Analysis /></AppLayout>
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
