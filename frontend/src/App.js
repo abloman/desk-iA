@@ -1,8 +1,8 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import axios from "axios";
-import { Toaster, toast } from "sonner";
+import { Toaster } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -67,7 +67,7 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-// Components
+// Components - imports at top level
 import Dashboard from "./pages/Dashboard";
 import Markets from "./pages/Markets";
 import Signals from "./pages/Signals";
@@ -78,22 +78,24 @@ import Login from "./pages/Login";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 
+const LoadingScreen = () => (
+  <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20"></div>
+  </div>
+);
+
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth();
   
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20"></div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
   
   if (!token) {
     return <Navigate to="/login" replace />;
   }
   
-  return children;
+  return <>{children}</>;
 };
 
 const Layout = ({ children }) => {
@@ -112,56 +114,51 @@ const Layout = ({ children }) => {
   );
 };
 
+// Page wrapper to avoid re-mounting Layout
+const ProtectedPage = ({ component: Component }) => {
+  return (
+    <ProtectedRoute>
+      <Layout>
+        <Component />
+      </Layout>
+    </ProtectedRoute>
+  );
+};
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/" element={<ProtectedPage component={Dashboard} />} />
+      <Route path="/markets" element={<ProtectedPage component={Markets} />} />
+      <Route path="/signals" element={<ProtectedPage component={Signals} />} />
+      <Route path="/portfolio" element={<ProtectedPage component={Portfolio} />} />
+      <Route path="/bot" element={<ProtectedPage component={Bot} />} />
+      <Route path="/analysis" element={<ProtectedPage component={Analysis} />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Toaster 
-          position="top-right" 
-          richColors 
-          theme="dark"
-          toastOptions={{
-            style: {
-              background: 'hsl(0 0% 4%)',
-              border: '1px solid hsl(0 0% 15%)',
-            }
-          }}
-        />
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Layout><Dashboard /></Layout>
-            </ProtectedRoute>
-          } />
-          <Route path="/markets" element={
-            <ProtectedRoute>
-              <Layout><Markets /></Layout>
-            </ProtectedRoute>
-          } />
-          <Route path="/signals" element={
-            <ProtectedRoute>
-              <Layout><Signals /></Layout>
-            </ProtectedRoute>
-          } />
-          <Route path="/portfolio" element={
-            <ProtectedRoute>
-              <Layout><Portfolio /></Layout>
-            </ProtectedRoute>
-          } />
-          <Route path="/bot" element={
-            <ProtectedRoute>
-              <Layout><Bot /></Layout>
-            </ProtectedRoute>
-          } />
-          <Route path="/analysis" element={
-            <ProtectedRoute>
-              <Layout><Analysis /></Layout>
-            </ProtectedRoute>
-          } />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <>
+      <Toaster 
+        position="top-right" 
+        richColors 
+        theme="dark"
+        toastOptions={{
+          style: {
+            background: 'hsl(0 0% 4%)',
+            border: '1px solid hsl(0 0% 15%)',
+          }
+        }}
+      />
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </>
   );
 }
 
