@@ -125,7 +125,8 @@ const Markets = () => {
           </TabsTrigger>
           <TabsTrigger value="crypto" data-testid="tab-crypto">Crypto</TabsTrigger>
           <TabsTrigger value="forex" data-testid="tab-forex">Forex</TabsTrigger>
-          <TabsTrigger value="stocks" data-testid="tab-stocks">Actions</TabsTrigger>
+          <TabsTrigger value="indices" data-testid="tab-indices">Indices</TabsTrigger>
+          <TabsTrigger value="metals" data-testid="tab-metals">Métaux</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="mt-4">
@@ -166,7 +167,8 @@ const Markets = () => {
                       <div className={`w-10 h-10 rounded flex items-center justify-center text-xs font-bold ${
                         market.type === 'crypto' ? 'bg-orange-500/10 text-orange-500' :
                         market.type === 'forex' ? 'bg-blue-500/10 text-blue-500' :
-                        'bg-purple-500/10 text-purple-500'
+                        market.type === 'indices' ? 'bg-purple-500/10 text-purple-500' :
+                        'bg-yellow-500/10 text-yellow-500'
                       }`}>
                         {market.symbol.split('/')[0].slice(0, 3)}
                       </div>
