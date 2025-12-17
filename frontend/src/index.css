@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,28 +6,26 @@
 
 @layer base {
     :root {
-        --background: 0 0% 2%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 4%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 4%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 239 84% 67%;
-        --primary-foreground: 0 0% 100%;
-        --secondary: 0 0% 10%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 15%;
-        --muted-foreground: 0 0% 64%;
-        --accent: 0 0% 15%;
-        --accent-foreground: 0 0% 98%;
+        --background: 222 47% 4%;
+        --foreground: 210 40% 98%;
+        --card: 222 47% 6%;
+        --card-foreground: 210 40% 98%;
+        --popover: 222 47% 6%;
+        --popover-foreground: 210 40% 98%;
+        --primary: 217 91% 60%;
+        --primary-foreground: 222 47% 4%;
+        --secondary: 217 33% 17%;
+        --secondary-foreground: 210 40% 98%;
+        --muted: 217 33% 17%;
+        --muted-foreground: 215 20% 65%;
+        --accent: 217 33% 17%;
+        --accent-foreground: 210 40% 98%;
         --destructive: 0 84% 60%;
-        --destructive-foreground: 0 0% 100%;
-        --border: 0 0% 15%;
-        --input: 0 0% 15%;
-        --ring: 239 84% 67%;
-        --radius: 0.25rem;
-        --success: 160 84% 39%;
-        --warning: 38 92% 50%;
+        --destructive-foreground: 210 40% 98%;
+        --border: 217 33% 17%;
+        --input: 217 33% 17%;
+        --ring: 217 91% 60%;
+        --radius: 0.5rem;
     }
 }
 
@@ -36,145 +34,98 @@
 }
 
 body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    font-family: 'IBM Plex Sans', sans-serif;
+    background-color: #020617;
+    color: #f1f5f9;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-/* Typography */
-.font-heading {
-    font-family: 'Chivo', sans-serif;
 }
 
 .font-mono {
     font-family: 'JetBrains Mono', monospace;
 }
 
-/* Custom scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-    background: hsl(var(--background));
+    background: #0f172a;
 }
-
 ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted));
+    background: #334155;
     border-radius: 3px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
-}
-
 /* Animations */
-@keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
 }
 
 @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 5px rgba(99, 102, 241, 0.3); }
-    50% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.6); }
+    0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
 }
-
-@keyframes fade-in {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-shimmer {
-    animation: shimmer 2s infinite;
-}
-
 .animate-pulse-glow {
     animation: pulse-glow 2s infinite;
 }
 
-.animate-fade-in {
-    animation: fade-in 0.3s ease-out;
+/* Trading colors */
+.text-profit { color: #34d399; }
+.text-loss { color: #f87171; }
+.bg-profit { background-color: rgba(52, 211, 153, 0.1); }
+.bg-loss { background-color: rgba(248, 113, 113, 0.1); }
+
+/* Badge styles */
+.badge-buy {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.3);
+}
+.badge-sell {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
+.badge-neutral {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
-/* Trading specific styles */
-.price-up {
-    color: #10B981;
+/* Card styles */
+.card-dark {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid #1e293b;
+    border-radius: 0.75rem;
 }
 
-.price-down {
-    color: #EF4444;
-}
-
-.glass-panel {
-    background: rgba(10, 11, 14, 0.8);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.glow-border {
-    position: relative;
-    overflow: hidden;
-}
-
-.glow-border::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.5), transparent, rgba(99, 102, 241, 0.5));
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-}
-
-/* Button hover effects */
-.btn-trading {
+/* Button hover */
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
     transition: transform 0.1s, box-shadow 0.2s;
 }
-
-.btn-trading:hover {
+.btn-primary:hover {
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
-.btn-trading:active {
-    transform: scale(0.98);
+/* Select styling */
+select {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    color: #f1f5f9;
+}
+select:focus {
+    outline: none;
+    border-color: #3b82f6;
 }
 
-/* Card hover */
-.card-hover {
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.card-hover:hover {
-    border-color: rgba(99, 102, 241, 0.5);
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
-}
-
-/* Signal badges */
-.signal-buy {
-    background: linear-gradient(135deg, #10B981, #059669);
-    color: white;
-}
-
-.signal-sell {
-    background: linear-gradient(135deg, #EF4444, #DC2626);
-    color: white;
-}
-
-.signal-neutral {
-    background: linear-gradient(135deg, #6B7280, #4B5563);
-    color: white;
-}
-
-/* Grid pattern background */
-.grid-pattern {
-    background-image: 
-        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
-    background-size: 50px 50px;
+/* Table hover */
+.table-row-hover:hover {
+    background: rgba(30, 41, 59, 0.5);
 }

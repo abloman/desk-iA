@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -8,7 +8,6 @@ const API = `${BACKEND_URL}/api`;
 
 // Auth Context
 const AuthContext = createContext(null);
-
 export const useAuth = () => useContext(AuthContext);
 
 const AuthProvider = ({ children }) => {
@@ -66,52 +65,90 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-// Components
-import Dashboard from "./pages/Dashboard";
-import Markets from "./pages/Markets";
-import Signals from "./pages/Signals";
-import Portfolio from "./pages/Portfolio";
-import Bot from "./pages/Bot";
-import Analysis from "./pages/Analysis";
+// Pages
+import AITradingDesk from "./pages/AITradingDesk";
+import Performance from "./pages/Performance";
+import RiskSettings from "./pages/RiskSettings";
 import Login from "./pages/Login";
-import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
 
 const LoadingScreen = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20" />
+  <div className="min-h-screen bg-[#020617] flex items-center justify-center">
+    <div className="animate-pulse-glow w-16 h-16 rounded-full bg-blue-500/20" />
   </div>
 );
 
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth();
-  
-  if (loading) {
-    return <LoadingScreen />;
-  }
-  
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-  
+  if (loading) return <LoadingScreen />;
+  if (!token) return <Navigate to="/login" replace />;
   return children;
 };
 
-const AppLayout = ({ children }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+// Navigation Header
+const NavHeader = () => {
+  const { logout } = useAuth();
+  const location = useLocation();
+  
+  const isActive = (path) => location.pathname === path;
   
   return (
-    <div className="min-h-screen bg-background grid-pattern">
-      <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-16'}`}>
-        <Header />
-        <main className="p-6">
-          {children}
-        </main>
+    <header className="flex flex-wrap items-center justify-between gap-4 p-6 border-b border-slate-800">
+      <div>
+        <h1 className="text-3xl font-bold text-blue-400 tracking-tight">Alphamind</h1>
+        <p className="text-xs text-slate-400 mt-1">
+          Assistant de trading IA multi-marchés
+        </p>
       </div>
-    </div>
+      <nav className="flex gap-2 text-xs">
+        <Link
+          to="/"
+          className={`px-3 py-2 rounded-lg border ${
+            isActive('/') 
+              ? 'bg-blue-600/20 border-blue-600 text-blue-200' 
+              : 'bg-slate-900 border-slate-700 hover:bg-slate-800'
+          }`}
+        >
+          🧠 IA Trading Desk
+        </Link>
+        <Link
+          to="/performance"
+          className={`px-3 py-2 rounded-lg border ${
+            isActive('/performance') 
+              ? 'bg-emerald-600/20 border-emerald-600 text-emerald-200' 
+              : 'bg-slate-900 border-slate-700 hover:bg-slate-800'
+          }`}
+        >
+          📊 Performance
+        </Link>
+        <Link
+          to="/risk"
+          className={`px-3 py-2 rounded-lg border ${
+            isActive('/risk') 
+              ? 'bg-purple-600/20 border-purple-600 text-purple-200' 
+              : 'bg-slate-900 border-slate-700 hover:bg-slate-800'
+          }`}
+        >
+          ⚙️ Risque & MT5
+        </Link>
+        <button
+          onClick={logout}
+          className="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-600 text-rose-200 hover:bg-rose-600/30"
+        >
+          Déconnexion
+        </button>
+      </nav>
+    </header>
   );
 };
+
+const AppLayout = ({ children }) => (
+  <div className="min-h-screen bg-[#020617] text-white">
+    <NavHeader />
+    <main className="p-6">
+      {children}
+    </main>
+  </div>
+);
 
 function App() {
   return (
@@ -121,32 +158,17 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={
             <ProtectedRoute>
-              <AppLayout><Dashboard /></AppLayout>
+              <AppLayout><AITradingDesk /></AppLayout>
             </ProtectedRoute>
           } />
-          <Route path="/markets" element={
+          <Route path="/performance" element={
             <ProtectedRoute>
-              <AppLayout><Markets /></AppLayout>
+              <AppLayout><Performance /></AppLayout>
             </ProtectedRoute>
           } />
-          <Route path="/signals" element={
+          <Route path="/risk" element={
             <ProtectedRoute>
-              <AppLayout><Signals /></AppLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/portfolio" element={
-            <ProtectedRoute>
-              <AppLayout><Portfolio /></AppLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/bot" element={
-            <ProtectedRoute>
-              <AppLayout><Bot /></AppLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/analysis" element={
-            <ProtectedRoute>
-              <AppLayout><Analysis /></AppLayout>
+              <AppLayout><RiskSettings /></AppLayout>
             </ProtectedRoute>
           } />
         </Routes>
