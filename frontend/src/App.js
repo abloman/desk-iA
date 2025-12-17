@@ -503,7 +503,7 @@ function PerformancePage() {
     });
     chartInstanceRef.current = chart;
 
-    const areaSeries = chart.addAreaSeries({
+    const areaSeries = chart.addSeries(AreaSeries, {
       lineColor: '#3b82f6',
       topColor: 'rgba(59, 130, 246, 0.4)',
       bottomColor: 'rgba(59, 130, 246, 0.0)',
