@@ -540,8 +540,8 @@ async def get_bot_config(user: dict = Depends(get_current_user)):
             "strategies": ["ICT", "SMC", "WYCKOFF"],
             "auto_execute": False
         }
-        await db.bot_configs.insert_one(config)
-    return config
+        await db.bot_configs.insert_one({**config, "_id": None})
+    return {k: v for k, v in config.items() if k != "_id"}
 
 @api_router.post("/bot/config")
 async def update_bot_config(config: BotConfig, user: dict = Depends(get_current_user)):
