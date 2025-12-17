@@ -293,22 +293,21 @@ class AlphaMindAPITester:
         
         self.run_test("Update Bot Config", "POST", "bot/config", 200, new_config)
 
-    def test_watchlist(self):
-        """Test watchlist endpoints"""
-        print("\n🔍 Testing Watchlist...")
+    def test_mt5_connection(self):
+        """Test MT5 connection endpoints"""
+        print("\n🔍 Testing MT5 Connection...")
         
-        # Get watchlist
-        success, watchlist_data = self.run_test("Get Watchlist", "GET", "watchlist", 200)
+        # Test MT5 connection
+        mt5_data = {
+            "server": "ICMarkets-Demo",
+            "login": "12345678",
+            "password": "testpass123"
+        }
         
-        if success:
-            symbols = watchlist_data.get('symbols', [])
-            print(f"   Watchlist has {len(symbols)} symbols")
+        self.run_test("Connect MT5", "POST", "bot/connect-mt5", 200, mt5_data)
         
-        # Add to watchlist
-        self.run_test("Add to Watchlist", "POST", "watchlist/add?symbol=ETH/USD", 200)
-        
-        # Remove from watchlist
-        self.run_test("Remove from Watchlist", "POST", "watchlist/remove?symbol=ETH/USD", 200)
+        # Test disconnect
+        self.run_test("Disconnect MT5", "POST", "bot/disconnect-mt5", 200)
 
     def run_all_tests(self):
         """Run all tests"""
