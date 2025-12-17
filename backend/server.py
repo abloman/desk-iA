@@ -470,33 +470,40 @@ def generate_advanced_analysis(strategy: str, price: float, symbol: str, volatil
     }
     
     return analyses.get(strategy, analyses["smc_ict_advanced"])
-            "pools": f"Liquidité identifiée à {round(price * 0.98, 2)} et {round(price * 1.02, 2)}",
-            "target": random.choice(["Chasse aux stops longs", "Chasse aux stops courts"]),
-            "imbalance": random.choice(["Imbalance haussier", "Imbalance baissier"]),
-            "bias": random.choice(["Bullish", "Bearish"])
-        }
-    }
-    
-    return analyses.get(strategy.lower(), analyses["smc"])
 
 @api_router.post("/ai/analyze")
 async def ai_analyze(request: AIAnalysisRequest, user: dict = Depends(get_current_user)):
-    """Generate AI trading signal with Claude Sonnet 4"""
+    """Generate AI trading signal with advanced strategies and volatility analysis"""
     
     # Get current price
     price = await get_current_price(request.symbol)
     
-    # Generate strategy analysis
-    strategy_analysis = generate_strategy_analysis(request.strategy, price, request.symbol)
+    # Calculate volatility for this symbol
+    volatility = calculate_volatility(request.symbol, price)
+    
+    # Map old strategy names to new advanced ones
+    strategy_mapping = {
+        "smc": "smc_ict_advanced",
+        "ict": "smc_ict_advanced",
+        "smc_ict_advanced": "smc_ict_advanced",
+        "market_structure": "market_structure",
+        "orderblock": "orderblock",
+        "ma_advanced": "ma_advanced",
+        "opr": "opr"
+    }
+    mapped_strategy = strategy_mapping.get(request.strategy.lower(), "smc_ict_advanced")
+    
+    # Generate advanced strategy analysis with volatility
+    strategy_analysis = generate_advanced_analysis(mapped_strategy, price, request.symbol, volatility)
     
     # Determine direction based on strategy bias
     direction = "BUY" if strategy_analysis.get("bias") == "Bullish" else "SELL"
     
-    # Calculate levels
-    levels = calculate_levels(price, direction, request.strategy, request.symbol)
+    # Calculate levels using volatility-aware calculation
+    levels = calculate_levels_advanced(price, direction, mapped_strategy, request.symbol, volatility)
     
-    # Calculate confidence based on multiple factors
-    base_confidence = random.randint(55, 85)
+    # Calculate confidence based on confluence score
+    base_confidence = strategy_analysis.get("confluence_score", 60)
     
     # Try Claude for enhanced analysis
     reasoning = f"Analyse {strategy_analysis['name']}: "
