@@ -275,56 +275,94 @@ async def get_price(symbol: str, user: dict = Depends(get_current_user)):
     price = await get_current_price(symbol)
     return {"symbol": symbol, "price": price, "timestamp": datetime.now(timezone.utc).isoformat()}
 
-# ==================== AI ANALYSIS ====================
+# ==================== VOLATILITY & MARKET CONDITIONS ====================
 
-def calculate_levels(price: float, direction: str, strategy: str, symbol: str):
-    """Calculate entry, SL, TP based on strategy and market type"""
-    
-    # Determine pip/point value based on symbol
-    if "JPY" in symbol:
-        pip = 0.01
-    elif any(x in symbol for x in ["EUR", "GBP", "AUD", "CHF", "NZD", "CAD"]) and "/" in symbol and "USD" in symbol:
-        pip = 0.0001
-    elif "XAU" in symbol:
-        pip = 0.10  # Gold moves in 10 cents
-    elif "XAG" in symbol:
-        pip = 0.01  # Silver moves in 1 cent
-    elif any(x in symbol for x in ["US30", "US100", "US500", "ES", "NQ"]):
-        pip = 1.0  # Indices and index futures move in points
-    elif symbol == "CL":
-        pip = 0.01  # Crude oil moves in cents
-    elif symbol in ["GC", "SI"]:
-        pip = 0.10  # Gold/Silver futures
-    elif any(x in symbol for x in ["GER", "UK", "FRA", "JPN"]):
-        pip = 1.0
-    elif "BTC" in symbol:
-        pip = price * 0.001  # 0.1% of price for BTC (~100$ for BTC at 100k)
-    elif "ETH" in symbol:
-        pip = price * 0.002  # 0.2% for ETH
-    elif "SOL" in symbol or "XRP" in symbol or "ADA" in symbol:
-        pip = price * 0.005  # 0.5% for altcoins
-    else:
-        pip = price * 0.002  # Default 0.2%
-    
-    # Strategy-specific parameters
-    strategy_params = {
-        "scalping": {"sl_pips": 10, "tp_ratio": 1.5},
-        "intraday": {"sl_pips": 25, "tp_ratio": 2.0},
-        "swing": {"sl_pips": 50, "tp_ratio": 3.0},
-        "smc": {"sl_pips": 30, "tp_ratio": 2.5},
-        "ict": {"sl_pips": 35, "tp_ratio": 2.5},
-        "wyckoff": {"sl_pips": 40, "tp_ratio": 3.0},
-        "macd": {"sl_pips": 25, "tp_ratio": 2.0},
-        "rsi": {"sl_pips": 20, "tp_ratio": 1.8},
-        "breakout": {"sl_pips": 30, "tp_ratio": 2.5},
-        "vwap": {"sl_pips": 20, "tp_ratio": 2.0},
-        "momentum": {"sl_pips": 25, "tp_ratio": 2.2},
-        "liquidity": {"sl_pips": 35, "tp_ratio": 2.8},
+def calculate_volatility(symbol: str, price: float) -> Dict:
+    """Calculate market volatility based on symbol type and simulated ATR"""
+    volatility_map = {
+        "BTC/USD": {"atr_pct": 2.5, "session": "24h", "type": "crypto"},
+        "ETH/USD": {"atr_pct": 3.0, "session": "24h", "type": "crypto"},
+        "SOL/USD": {"atr_pct": 4.5, "session": "24h", "type": "crypto"},
+        "XRP/USD": {"atr_pct": 4.0, "session": "24h", "type": "crypto"},
+        "ADA/USD": {"atr_pct": 4.2, "session": "24h", "type": "crypto"},
+        "EUR/USD": {"atr_pct": 0.5, "session": "london_ny", "type": "forex"},
+        "GBP/USD": {"atr_pct": 0.6, "session": "london_ny", "type": "forex"},
+        "USD/JPY": {"atr_pct": 0.55, "session": "asian_london", "type": "forex"},
+        "XAU/USD": {"atr_pct": 1.2, "session": "london_ny", "type": "metals"},
+        "US30": {"atr_pct": 0.8, "session": "ny", "type": "indices"},
+        "US100": {"atr_pct": 1.0, "session": "ny", "type": "indices"},
+        "ES": {"atr_pct": 0.9, "session": "ny", "type": "futures"},
+        "NQ": {"atr_pct": 1.1, "session": "ny", "type": "futures"},
+        "CL": {"atr_pct": 2.0, "session": "ny", "type": "futures"},
+        "GC": {"atr_pct": 1.0, "session": "ny", "type": "futures"},
     }
     
-    params = strategy_params.get(strategy.lower(), {"sl_pips": 25, "tp_ratio": 2.0})
-    sl_distance = params["sl_pips"] * pip
-    tp_distance = sl_distance * params["tp_ratio"]
+    base = volatility_map.get(symbol, {"atr_pct": 1.5, "session": "24h", "type": "other"})
+    # Add randomness to simulate real market conditions
+    current_atr = price * (base["atr_pct"] / 100) * random.uniform(0.8, 1.2)
+    
+    return {
+        "atr": round(current_atr, 4),
+        "atr_pct": round(base["atr_pct"] * random.uniform(0.8, 1.2), 2),
+        "session": base["session"],
+        "market_type": base["type"],
+        "volatility_level": "high" if base["atr_pct"] > 2 else "medium" if base["atr_pct"] > 1 else "low"
+    }
+
+# ==================== 5 ADVANCED STRATEGIES ====================
+
+ADVANCED_STRATEGIES = {
+    "smc_ict_advanced": {
+        "name": "SMC/ICT Avancée",
+        "description": "Combine SMC + ICT concepts: BOS, CHOCH, FVG, Order Blocks, Liquidity Sweeps",
+        "sl_atr_mult": 1.5,
+        "tp_atr_mult": 3.0,
+        "min_rr": 2.0
+    },
+    "market_structure": {
+        "name": "Market Structure Avancé",
+        "description": "Analyse structure externe (HTF) et interne (LTF) avec confluence",
+        "sl_atr_mult": 1.2,
+        "tp_atr_mult": 2.5,
+        "min_rr": 2.0
+    },
+    "orderblock": {
+        "name": "Order Block + Imbalances",
+        "description": "Détecte Order Blocks avec FVG/Imbalances pour entries précises",
+        "sl_atr_mult": 1.0,
+        "tp_atr_mult": 2.5,
+        "min_rr": 2.5
+    },
+    "ma_advanced": {
+        "name": "Moyenne Mobile Avancé",
+        "description": "EMA 9/21/50/200 avec confluence de structure et momentum",
+        "sl_atr_mult": 1.3,
+        "tp_atr_mult": 2.6,
+        "min_rr": 2.0
+    },
+    "opr": {
+        "name": "OPR (Opening Price Range)",
+        "description": "Trade basé sur le range d'ouverture avec expansion targets",
+        "sl_atr_mult": 0.8,
+        "tp_atr_mult": 1.6,
+        "min_rr": 2.0
+    }
+}
+
+def calculate_levels_advanced(price: float, direction: str, strategy: str, symbol: str, volatility: Dict) -> Dict:
+    """Calculate entry, SL, TP based on advanced strategy with volatility consideration"""
+    
+    atr = volatility["atr"]
+    strat = ADVANCED_STRATEGIES.get(strategy, ADVANCED_STRATEGIES["smc_ict_advanced"])
+    
+    sl_distance = atr * strat["sl_atr_mult"]
+    tp_distance = atr * strat["tp_atr_mult"]
+    
+    # Ensure minimum RR ratio
+    if tp_distance / sl_distance < strat["min_rr"]:
+        tp_distance = sl_distance * strat["min_rr"]
+    
+    decimals = 4 if price < 10 else 2
     
     if direction == "BUY":
         sl = price - sl_distance
@@ -338,76 +376,100 @@ def calculate_levels(price: float, direction: str, strategy: str, symbol: str):
         tp3 = price - tp_distance * 2
     
     return {
-        "entry": round(price, 5 if price < 10 else 2),
-        "sl": round(sl, 5 if price < 10 else 2),
-        "tp1": round(tp1, 5 if price < 10 else 2),
-        "tp2": round(tp2, 5 if price < 10 else 2),
-        "tp3": round(tp3, 5 if price < 10 else 2),
-        "rr": round(params["tp_ratio"], 2)
+        "entry": round(price, decimals),
+        "sl": round(sl, decimals),
+        "tp1": round(tp1, decimals),
+        "tp2": round(tp2, decimals),
+        "tp3": round(tp3, decimals),
+        "rr": round(tp_distance / sl_distance, 2),
+        "sl_pips": round(sl_distance, decimals),
+        "tp_pips": round(tp_distance, decimals)
     }
 
-def generate_strategy_analysis(strategy: str, price: float, symbol: str) -> Dict:
-    """Generate detailed analysis based on strategy"""
+def generate_advanced_analysis(strategy: str, price: float, symbol: str, volatility: Dict) -> Dict:
+    """Generate detailed analysis for advanced strategies"""
+    
+    # Determine market structure
+    htf_structure = random.choice(["Bullish", "Bearish", "Ranging"])
+    ltf_structure = random.choice(["Bullish", "Bearish", "Ranging"])
+    
+    # Confluence score based on structure alignment
+    confluence = 0
+    if htf_structure == ltf_structure:
+        confluence += 30
+    if volatility["volatility_level"] in ["medium", "high"]:
+        confluence += 20
+    confluence += random.randint(20, 50)
+    
+    bias = "Bullish" if confluence > 55 else "Bearish" if confluence < 45 else random.choice(["Bullish", "Bearish"])
     
     analyses = {
-        "smc": {
-            "name": "Smart Money Concepts",
-            "structure": random.choice(["Bullish BOS confirmé", "Bearish CHOCH détecté", "Range avec accumulation"]),
-            "poi": f"Order Block identifié à {round(price * 0.995, 2)}",
-            "liquidity": random.choice(["Pool de liquidité au-dessus des highs", "Stops sous les lows précédents"]),
-            "bias": random.choice(["Bullish", "Bearish"])
+        "smc_ict_advanced": {
+            "name": "SMC/ICT Avancée",
+            "htf_structure": htf_structure,
+            "ltf_structure": ltf_structure,
+            "bos_choch": random.choice(["BOS haussier confirmé sur H4", "CHOCH baissier sur H1", "BOS en attente"]),
+            "order_block": f"OB identifié à {round(price * (0.995 if bias == 'Bullish' else 1.005), 2)}",
+            "fvg": f"FVG entre {round(price * 0.997, 2)} - {round(price * 1.003, 2)}",
+            "liquidity": random.choice(["Liquidité buy-side à chasser", "Liquidité sell-side proche", "Sweep effectué"]),
+            "poi": f"POI optimal: {round(price * (0.998 if bias == 'Bullish' else 1.002), 2)}",
+            "confluence_score": confluence,
+            "bias": bias
         },
-        "ict": {
-            "name": "Inner Circle Trader",
-            "fvg": f"FVG présent entre {round(price * 0.998, 2)} et {round(price * 1.002, 2)}",
-            "displacement": random.choice(["Displacement haussier fort", "Displacement baissier", "Consolidation"]),
-            "killzone": random.choice(["London Open", "NY Open", "Asian Session"]),
-            "bias": random.choice(["Bullish", "Bearish"])
+        "market_structure": {
+            "name": "Market Structure Avancé",
+            "external_structure": f"HTF ({htf_structure}): " + random.choice(["Trend établi", "Consolidation", "Reversal possible"]),
+            "internal_structure": f"LTF ({ltf_structure}): " + random.choice(["Impulsion en cours", "Correction active", "Range"]),
+            "key_levels": {
+                "resistance": round(price * 1.015, 2),
+                "support": round(price * 0.985, 2),
+                "pivot": round(price, 2)
+            },
+            "structure_break": random.choice(["Break of structure imminent", "Structure intacte", "Retest en cours"]),
+            "confluence_score": confluence,
+            "bias": bias
         },
-        "wyckoff": {
-            "name": "Wyckoff Method",
-            "phase": random.choice(["Accumulation Phase C", "Distribution Phase B", "Markup", "Markdown"]),
-            "spring": random.choice(["Spring potentiel détecté", "UTAD en formation", "Test du support"]),
-            "volume": random.choice(["Volume en augmentation", "Climax de volume", "Volume faible"]),
-            "bias": random.choice(["Bullish", "Bearish"])
+        "orderblock": {
+            "name": "Order Block + Imbalances",
+            "bullish_ob": f"Bullish OB: {round(price * 0.992, 2)} - {round(price * 0.995, 2)}",
+            "bearish_ob": f"Bearish OB: {round(price * 1.005, 2)} - {round(price * 1.008, 2)}",
+            "fvg_zones": [
+                f"FVG up: {round(price * 1.002, 2)}",
+                f"FVG down: {round(price * 0.998, 2)}"
+            ],
+            "imbalance": random.choice(["Imbalance haussier à combler", "Imbalance baissier présent", "Zones équilibrées"]),
+            "mitigation": random.choice(["OB non mitigé (valide)", "OB partiellement mitigé", "Attente retest"]),
+            "confluence_score": confluence,
+            "bias": bias
         },
-        "macd": {
-            "name": "MACD Strategy",
-            "signal": random.choice(["Croisement haussier", "Croisement baissier", "Divergence"]),
-            "histogram": random.choice(["Histogramme croissant", "Histogramme décroissant"]),
-            "trend": random.choice(["Au-dessus de zéro", "Sous zéro"]),
-            "bias": random.choice(["Bullish", "Bearish"])
+        "ma_advanced": {
+            "name": "Moyenne Mobile Avancé",
+            "ema_9": round(price * random.uniform(0.998, 1.002), 2),
+            "ema_21": round(price * random.uniform(0.995, 1.005), 2),
+            "ema_50": round(price * random.uniform(0.99, 1.01), 2),
+            "ema_200": round(price * random.uniform(0.98, 1.02), 2),
+            "alignment": random.choice(["Alignement haussier parfait", "Alignement baissier", "EMAs en compression"]),
+            "golden_cross": random.choice(["Golden cross récent", "Death cross en formation", "Pas de croisement"]),
+            "price_position": random.choice(["Prix au-dessus de toutes les EMAs", "Prix sous les EMAs rapides", "Prix en zone EMA"]),
+            "confluence_score": confluence,
+            "bias": bias
         },
-        "rsi": {
-            "name": "RSI Strategy",
-            "level": random.randint(25, 75),
-            "condition": random.choice(["Survendu - rebond attendu", "Suracheté - correction attendue", "Zone neutre"]),
-            "divergence": random.choice(["Divergence haussière", "Divergence baissière", "Pas de divergence"]),
-            "bias": random.choice(["Bullish", "Bearish"])
-        },
-        "breakout": {
-            "name": "Breakout Strategy",
-            "level": f"Résistance à {round(price * 1.01, 2)}, Support à {round(price * 0.99, 2)}",
-            "pattern": random.choice(["Triangle ascendant", "Rectangle", "Wedge"]),
-            "confirmation": random.choice(["En attente de cassure", "Cassure confirmée", "Fausse cassure"]),
-            "bias": random.choice(["Bullish", "Bearish"])
-        },
-        "vwap": {
-            "name": "VWAP Strategy",
-            "position": random.choice(["Prix au-dessus du VWAP", "Prix sous le VWAP"]),
-            "deviation": random.choice(["+1 SD", "-1 SD", "Sur le VWAP"]),
-            "trend": random.choice(["Tendance haussière", "Tendance baissière", "Range"]),
-            "bias": random.choice(["Bullish", "Bearish"])
-        },
-        "momentum": {
-            "name": "Momentum Strategy",
-            "strength": random.choice(["Momentum fort", "Momentum faible", "Momentum neutre"]),
-            "acceleration": random.choice(["Accélération", "Décélération", "Stable"]),
-            "trend": random.choice(["Trend up", "Trend down", "Sideways"]),
-            "bias": random.choice(["Bullish", "Bearish"])
-        },
-        "liquidity": {
-            "name": "Liquidity Hunting",
+        "opr": {
+            "name": "OPR (Opening Price Range)",
+            "open_price": round(price * random.uniform(0.998, 1.002), 2),
+            "opr_high": round(price * 1.005, 2),
+            "opr_low": round(price * 0.995, 2),
+            "range_size": round(price * 0.01, 2),
+            "expansion_target_up": round(price * 1.015, 2),
+            "expansion_target_down": round(price * 0.985, 2),
+            "breakout_status": random.choice(["Breakout haussier confirmé", "Breakout baissier", "En attente de breakout"]),
+            "session": volatility["session"],
+            "confluence_score": confluence,
+            "bias": bias
+        }
+    }
+    
+    return analyses.get(strategy, analyses["smc_ict_advanced"])
             "pools": f"Liquidité identifiée à {round(price * 0.98, 2)} et {round(price * 1.02, 2)}",
             "target": random.choice(["Chasse aux stops longs", "Chasse aux stops courts"]),
             "imbalance": random.choice(["Imbalance haussier", "Imbalance baissier"]),
