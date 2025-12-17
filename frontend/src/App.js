@@ -359,7 +359,7 @@ function TradingPage() {
             <Select label="Mode" value={mode} onChange={setMode} options={MODES.map(m => ({v: m, l: m}))} />
           </div>
           
-          <Select label="Stratégie" value={strategy} onChange={setStrategy} options={STRATEGIES.map(s => ({v: s, l: s.toUpperCase()}))} />
+          <Select label="Stratégie" value={strategy} onChange={setStrategy} options={STRATEGIES.map(s => ({v: s.id, l: s.name}))} />
 
           <button
             onClick={generateSignal}
