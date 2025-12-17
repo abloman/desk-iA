@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../App";
-import { toast } from "sonner";
 import { Zap, Mail, Lock, User, ArrowRight, TrendingUp } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -12,24 +11,24 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
     
     try {
       if (isLogin) {
         await login(email, password);
-        toast.success("Connexion réussie");
       } else {
         await register(email, password, name);
-        toast.success("Compte créé avec succès");
       }
       navigate("/");
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Erreur de connexion");
+      setError(err.response?.data?.detail || "Erreur de connexion");
     } finally {
       setLoading(false);
     }
@@ -45,7 +44,7 @@ const Login = () => {
             backgroundImage: "url('https://images.unsplash.com/photo-1591911913225-b4f65b23a475?crop=entropy&cs=srgb&fm=jpg&q=85')",
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
         </div>
         
         <div className="relative z-10 p-12 flex flex-col justify-between">
@@ -68,16 +67,20 @@ const Login = () => {
             
             <div className="flex gap-6 pt-4">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <div className="w-2 h-2 rounded-full bg-orange-500" />
                 <span className="text-sm text-muted-foreground">Crypto</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
                 <span className="text-sm text-muted-foreground">Forex</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                <span className="text-sm text-muted-foreground">Actions</span>
+                <div className="w-2 h-2 rounded-full bg-purple-500" />
+                <span className="text-sm text-muted-foreground">Indices</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                <span className="text-sm text-muted-foreground">Métaux</span>
               </div>
             </div>
           </div>
@@ -110,6 +113,12 @@ const Login = () => {
                 : "Rejoignez AlphaMind et tradez intelligemment"}
             </p>
           </div>
+
+          {error && (
+            <div className="p-3 rounded bg-red-500/10 border border-red-500/30 text-red-500 text-sm">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
@@ -168,7 +177,7 @@ const Login = () => {
               data-testid="submit-btn"
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
                   {isLogin ? "Se connecter" : "Créer le compte"}
@@ -180,7 +189,7 @@ const Login = () => {
 
           <div className="text-center">
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => { setIsLogin(!isLogin); setError(""); }}
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
               data-testid="toggle-auth-mode"
             >
