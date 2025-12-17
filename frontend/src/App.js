@@ -460,6 +460,11 @@ function TradingPage() {
 function PerformancePage() {
   const [portfolio, setPortfolio] = useState({});
   const [trades, setTrades] = useState([]);
+  const [equityData, setEquityData] = useState([]);
+  const [strategyStats, setStrategyStats] = useState([]);
+  const [clearing, setClearing] = useState(false);
+  const equityChartRef = useRef(null);
+  const chartInstanceRef = useRef(null);
 
   useEffect(() => {
     fetchData();
@@ -467,13 +472,65 @@ function PerformancePage() {
 
   const fetchData = async () => {
     try {
-      const [p, t] = await Promise.all([
+      const [p, t, eq, strats] = await Promise.all([
         axios.get(`${API}/portfolio`),
-        axios.get(`${API}/trades`)
+        axios.get(`${API}/trades`),
+        axios.get(`${API}/portfolio/equity-curve`),
+        axios.get(`${API}/portfolio/strategy-stats`)
       ]);
       setPortfolio(p.data);
       setTrades(t.data.trades || []);
+      setEquityData(eq.data.equity_curve || []);
+      setStrategyStats(strats.data.strategy_stats || []);
     } catch (e) {}
+  };
+
+  // Equity Chart
+  useEffect(() => {
+    if (!equityChartRef.current || equityData.length === 0) return;
+    
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.remove();
+    }
+
+    const chart = createChart(equityChartRef.current, {
+      layout: { background: { type: ColorType.Solid, color: '#0f172a' }, textColor: '#94a3b8' },
+      grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+      width: equityChartRef.current.clientWidth,
+      height: 250,
+      rightPriceScale: { borderColor: '#334155' },
+      timeScale: { borderColor: '#334155', timeVisible: true },
+    });
+    chartInstanceRef.current = chart;
+
+    const areaSeries = chart.addAreaSeries({
+      lineColor: '#3b82f6',
+      topColor: 'rgba(59, 130, 246, 0.4)',
+      bottomColor: 'rgba(59, 130, 246, 0.0)',
+      lineWidth: 2,
+    });
+
+    const data = equityData.map((d, i) => ({
+      time: Math.floor(new Date(d.timestamp).getTime() / 1000),
+      value: d.equity
+    }));
+    
+    if (data.length > 0) {
+      areaSeries.setData(data);
+      chart.timeScale().fitContent();
+    }
+
+    return () => chart.remove();
+  }, [equityData]);
+
+  const clearHistory = async () => {
+    if (!window.confirm("Êtes-vous sûr de vouloir effacer tout l'historique ?")) return;
+    setClearing(true);
+    try {
+      await axios.delete(`${API}/portfolio/clear-history`);
+      fetchData();
+    } catch (e) {}
+    setClearing(false);
   };
 
   const closedTrades = trades.filter(t => t.status === "closed");
@@ -481,6 +538,7 @@ function PerformancePage() {
 
   return (
     <div className="p-4 space-y-4">
+      {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard label="Balance" value={`${fmt(portfolio.balance)}$`} color="text-sky-400" />
         <StatCard label="PnL Total" value={`${fmt(portfolio.total_pnl)}$`} color={portfolio.total_pnl >= 0 ? "text-emerald-400" : "text-red-400"} />
@@ -488,8 +546,55 @@ function PerformancePage() {
         <StatCard label="Total Trades" value={portfolio.total_trades || 0} />
       </div>
 
+      {/* Equity Curve */}
       <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
-        <h2 className="text-emerald-400 font-semibold mb-3">Historique des Trades</h2>
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-blue-400 font-semibold">📈 Courbe d'Equity</h2>
+          <button 
+            onClick={clearHistory}
+            disabled={clearing}
+            className="px-3 py-1 bg-red-600 hover:bg-red-500 rounded text-xs font-semibold disabled:opacity-50"
+          >
+            {clearing ? "..." : "🗑️ Effacer historique"}
+          </button>
+        </div>
+        {equityData.length === 0 ? (
+          <p className="text-slate-500 text-sm text-center py-8">Aucun trade clôturé pour afficher la courbe</p>
+        ) : (
+          <div ref={equityChartRef} className="w-full" />
+        )}
+      </div>
+
+      {/* Strategy Rankings */}
+      <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+        <h2 className="text-purple-400 font-semibold mb-3">🏆 Classement par Stratégie</h2>
+        {strategyStats.length === 0 ? (
+          <p className="text-slate-500 text-sm">Aucune donnée de stratégie</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {strategyStats.map((s, idx) => (
+              <div key={s.strategy} className="bg-slate-800 rounded-lg p-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-semibold text-sm">{idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "📊"} {s.strategy_name}</span>
+                  <span className={`text-sm font-bold ${s.total_pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {s.total_pnl >= 0 ? "+" : ""}{fmt(s.total_pnl)}$
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
+                  <div>Trades: <span className="text-white">{s.total_trades}</span></div>
+                  <div>Winrate: <span className="text-blue-400">{fmt(s.win_rate)}%</span></div>
+                  <div>Avg PnL: <span className={s.avg_pnl >= 0 ? "text-emerald-400" : "text-red-400"}>{fmt(s.avg_pnl)}$</span></div>
+                  <div>Max Win: <span className="text-emerald-400">{fmt(s.max_win)}$</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Trade History */}
+      <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+        <h2 className="text-emerald-400 font-semibold mb-3">📋 Historique des Trades</h2>
         {closedTrades.length === 0 ? (
           <p className="text-slate-500 text-sm">Aucun trade clôturé</p>
         ) : (
@@ -498,6 +603,7 @@ function PerformancePage() {
               <tr>
                 <th className="py-2 text-left">Symbole</th>
                 <th className="py-2 text-left">Side</th>
+                <th className="py-2 text-left">Stratégie</th>
                 <th className="py-2 text-right">Entry</th>
                 <th className="py-2 text-right">Exit</th>
                 <th className="py-2 text-right">PnL</th>
@@ -513,12 +619,13 @@ function PerformancePage() {
                       {t.direction}
                     </span>
                   </td>
+                  <td className="py-2 text-slate-400 text-xs">{t.strategy || "-"}</td>
                   <td className="py-2 text-right font-mono">{fmt(t.entry_price, 4)}</td>
                   <td className="py-2 text-right font-mono">{fmt(t.exit_price, 4)}</td>
                   <td className={`py-2 text-right font-mono font-bold ${t.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {fmt(t.pnl)}$
+                    {t.pnl >= 0 ? "+" : ""}{fmt(t.pnl)}$
                   </td>
-                  <td className="py-2 text-right text-slate-400">
+                  <td className="py-2 text-right text-slate-400 text-xs">
                     {t.closed_at ? new Date(t.closed_at).toLocaleDateString() : "-"}
                   </td>
                 </tr>
