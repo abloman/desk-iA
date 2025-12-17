@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { toast } from "sonner";
 import { 
   Bot as BotIcon, Power, Settings, Shield, 
-  TrendingUp, AlertTriangle, Check, Zap
+  TrendingUp, AlertTriangle, Check, Zap, Link2, Unlink
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -11,21 +10,49 @@ import { Switch } from "../components/ui/switch";
 import { Slider } from "../components/ui/slider";
 import { Badge } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
+import { Input } from "../components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../components/ui/dialog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Simple toast function
+const showToast = (message, type = 'success') => {
+  const toast = document.createElement('div');
+  toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-sm border ${
+    type === 'success' 
+      ? 'bg-green-500/10 border-green-500/50 text-green-500' 
+      : 'bg-red-500/10 border-red-500/50 text-red-500'
+  } animate-fade-in`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+};
 
 const Bot = () => {
   const [config, setConfig] = useState({
     enabled: false,
     risk_per_trade: 0.02,
     max_daily_trades: 10,
-    allowed_markets: ["crypto", "forex", "stocks"],
+    allowed_markets: ["crypto", "forex", "indices", "metals"],
     strategies: ["ICT", "SMC", "WYCKOFF"],
-    auto_execute: false
+    auto_execute: false,
+    mt5_connected: false,
+    mt5_server: null,
+    mt5_login: null
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [mt5Dialog, setMt5Dialog] = useState(false);
+  const [mt5Form, setMt5Form] = useState({ server: "", login: "", password: "" });
+  const [connecting, setConnecting] = useState(false);
 
   useEffect(() => {
     fetchConfig();
@@ -46,11 +73,40 @@ const Bot = () => {
     setSaving(true);
     try {
       await axios.post(`${API}/bot/config`, config);
-      toast.success("Configuration sauvegardée");
+      showToast("Configuration sauvegardée");
     } catch (e) {
-      toast.error("Erreur lors de la sauvegarde");
+      showToast("Erreur lors de la sauvegarde", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const connectMT5 = async () => {
+    if (!mt5Form.server || !mt5Form.login || !mt5Form.password) {
+      showToast("Veuillez remplir tous les champs", "error");
+      return;
+    }
+    setConnecting(true);
+    try {
+      await axios.post(`${API}/bot/connect-mt5`, mt5Form);
+      setConfig({ ...config, mt5_connected: true, mt5_server: mt5Form.server, mt5_login: mt5Form.login });
+      setMt5Dialog(false);
+      setMt5Form({ server: "", login: "", password: "" });
+      showToast("Connexion MT5 établie");
+    } catch (e) {
+      showToast("Erreur de connexion MT5", "error");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const disconnectMT5 = async () => {
+    try {
+      await axios.post(`${API}/bot/disconnect-mt5`);
+      setConfig({ ...config, mt5_connected: false, mt5_server: null, mt5_login: null });
+      showToast("MT5 déconnecté");
+    } catch (e) {
+      showToast("Erreur lors de la déconnexion", "error");
     }
   };
 
@@ -85,7 +141,7 @@ const Bot = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20"></div>
+        <div className="animate-pulse-glow w-16 h-16 rounded-full bg-primary/20" />
       </div>
     );
   }
@@ -100,24 +156,145 @@ const Bot = () => {
             Bot semi-automatique avec confirmation manuelle
           </p>
         </div>
-        <Button 
-          onClick={saveConfig}
-          disabled={saving}
-          className="btn-trading"
-          data-testid="save-config-btn"
-        >
-          {saving ? (
-            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin mr-2"></div>
-          ) : (
-            <Check className="w-4 h-4 mr-2" />
-          )}
-          Sauvegarder
-        </Button>
+        <div className="flex items-center gap-3">
+          <Dialog open={mt5Dialog} onOpenChange={setMt5Dialog}>
+            <DialogTrigger asChild>
+              <Button 
+                variant={config.mt5_connected ? "outline" : "default"}
+                className="btn-trading"
+                data-testid="mt5-connect-btn"
+              >
+                {config.mt5_connected ? (
+                  <>
+                    <Link2 className="w-4 h-4 mr-2 text-green-500" />
+                    MT5 Connecté
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="w-4 h-4 mr-2" />
+                    Connecter MT5
+                  </>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-heading">
+                  {config.mt5_connected ? "Connexion MT5" : "Connecter à MetaTrader 5"}
+                </DialogTitle>
+                <DialogDescription>
+                  {config.mt5_connected 
+                    ? `Connecté au serveur ${config.mt5_server}`
+                    : "Entrez vos identifiants MT5 pour connecter le bot"
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              {config.mt5_connected ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded bg-green-500/10 border border-green-500/20">
+                    <div className="flex items-center gap-2 text-green-500 mb-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                      <span className="font-medium">Connexion Active</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Serveur: {config.mt5_server}</p>
+                    <p className="text-sm text-muted-foreground">Login: {config.mt5_login}</p>
+                  </div>
+                  <Button 
+                    variant="destructive" 
+                    className="w-full"
+                    onClick={disconnectMT5}
+                  >
+                    <Unlink className="w-4 h-4 mr-2" />
+                    Déconnecter
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Serveur MT5</label>
+                    <Input
+                      placeholder="Ex: ICMarkets-Demo"
+                      value={mt5Form.server}
+                      onChange={(e) => setMt5Form({ ...mt5Form, server: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Login</label>
+                    <Input
+                      placeholder="Votre numéro de compte"
+                      value={mt5Form.login}
+                      onChange={(e) => setMt5Form({ ...mt5Form, login: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Mot de passe</label>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      value={mt5Form.password}
+                      onChange={(e) => setMt5Form({ ...mt5Form, password: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <Button 
+                    className="w-full btn-trading"
+                    onClick={connectMT5}
+                    disabled={connecting}
+                  >
+                    {connecting ? (
+                      <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin mr-2" />
+                    ) : (
+                      <Link2 className="w-4 h-4 mr-2" />
+                    )}
+                    {connecting ? "Connexion..." : "Connecter"}
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+          <Button 
+            onClick={saveConfig}
+            disabled={saving}
+            className="btn-trading"
+            data-testid="save-config-btn"
+          >
+            {saving ? (
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin mr-2" />
+            ) : (
+              <Check className="w-4 h-4 mr-2" />
+            )}
+            Sauvegarder
+          </Button>
+        </div>
       </div>
+
+      {/* MT5 Status Banner */}
+      {config.mt5_connected && (
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded bg-green-500/20 flex items-center justify-center">
+                <Link2 className="w-5 h-5 text-green-500" />
+              </div>
+              <div>
+                <p className="font-medium text-green-500">MetaTrader 5 Connecté</p>
+                <p className="text-xs text-muted-foreground">
+                  {config.mt5_server} • Login: {config.mt5_login}
+                </p>
+              </div>
+            </div>
+            <Badge className="bg-green-500/20 text-green-500 border-green-500/30">
+              Prêt pour le trading
+            </Badge>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Status Card */}
       <Card className={`overflow-hidden ${config.enabled ? 'glow-border' : ''}`} data-testid="bot-status-card">
-        <div className={`h-1 ${config.enabled ? 'bg-green-500' : 'bg-muted'}`}></div>
+        <div className={`h-1 ${config.enabled ? 'bg-green-500' : 'bg-muted'}`} />
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -248,11 +425,12 @@ const Bot = () => {
           <CardContent className="pt-6 space-y-6">
             <div>
               <label className="text-sm font-medium mb-3 block">Marchés autorisés</label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {[
                   { id: 'crypto', label: 'Crypto', color: 'orange' },
                   { id: 'forex', label: 'Forex', color: 'blue' },
-                  { id: 'stocks', label: 'Actions', color: 'purple' }
+                  { id: 'indices', label: 'Indices', color: 'purple' },
+                  { id: 'metals', label: 'Métaux', color: 'yellow' }
                 ].map((market) => (
                   <button
                     key={market.id}
@@ -335,6 +513,11 @@ const Bot = () => {
                 {s}
               </Badge>
             ))}
+            {config.mt5_connected && (
+              <Badge className="bg-green-500/20 text-green-500">
+                MT5
+              </Badge>
+            )}
           </div>
         </CardContent>
       </Card>
