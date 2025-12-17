@@ -836,7 +836,7 @@ function TradingChartComponent({ symbol, signal, trades = [] }) {
 
     chartRef.current = chart;
 
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#10b981', downColor: '#ef4444',
       borderUpColor: '#10b981', borderDownColor: '#ef4444',
       wickUpColor: '#10b981', wickDownColor: '#ef4444',
