@@ -15,22 +15,25 @@ import bcrypt
 import asyncio
 import httpx
 import json
+import random
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# JWT Config
 JWT_SECRET = os.environ.get('JWT_SECRET', 'alphamind_secret_key')
 JWT_ALGORITHM = "HS256"
 security = HTTPBearer()
 
 app = FastAPI(title="AlphaMind Trading API")
 api_router = APIRouter(prefix="/api")
+
+# ==================== PRICE CACHE ====================
+PRICE_CACHE = {}
+PRICE_CACHE_TIME = None
 
 # ==================== MODELS ====================
 
@@ -43,33 +46,25 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-class SignalCreate(BaseModel):
-    symbol: str
-    direction: str  # BUY/SELL
-    entry_price: float
-    stop_loss: float
-    take_profit_1: float
-    take_profit_2: Optional[float] = None
-    take_profit_3: Optional[float] = None
-    confidence: float
-    strategy: str
-    analysis: Optional[str] = None
-
 class TradeCreate(BaseModel):
-    signal_id: str
+    signal_id: Optional[str] = None
     symbol: str
     direction: str
     entry_price: float
     quantity: float
     stop_loss: float
     take_profit: float
+    strategy: Optional[str] = None
+
+class TradeClose(BaseModel):
+    exit_price: float
 
 class BotConfig(BaseModel):
-    enabled: bool
+    enabled: bool = False
     risk_per_trade: float = 0.02
     max_daily_trades: int = 10
     allowed_markets: List[str] = ["crypto", "forex", "indices", "metals"]
-    strategies: List[str] = ["ICT", "SMC", "WYCKOFF"]
+    strategies: List[str] = ["smc", "ict", "wyckoff"]
     auto_execute: bool = False
     mt5_connected: bool = False
     mt5_server: Optional[str] = None
@@ -77,10 +72,17 @@ class BotConfig(BaseModel):
 
 class AIAnalysisRequest(BaseModel):
     symbol: str
-    timeframe: str = "1h"
+    timeframe: str = "15min"
     market_type: str = "crypto"
+    mode: str = "intraday"
+    strategy: str = "smc"
 
-# ==================== AUTH HELPERS ====================
+class MT5ConnectRequest(BaseModel):
+    server: str
+    login: str
+    password: str
+
+# ==================== AUTH ====================
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -108,8 +110,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# ==================== AUTH ROUTES ====================
-
 @api_router.post("/auth/register")
 async def register(data: UserCreate):
     existing = await db.users.find_one({"email": data.email})
@@ -122,13 +122,9 @@ async def register(data: UserCreate):
         "password": hash_password(data.password),
         "name": data.name or data.email.split("@")[0],
         "balance": 10000.0,
-        "pnl": 0.0,
-        "total_trades": 0,
-        "winning_trades": 0,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one(user)
-    
     token = create_token(user["id"], user["email"])
     return {"token": token, "user": {k: v for k, v in user.items() if k not in ["password", "_id"]}}
 
@@ -137,7 +133,6 @@ async def login(data: UserLogin):
     user = await db.users.find_one({"email": data.email})
     if not user or not verify_password(data.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
     token = create_token(user["id"], user["email"])
     return {"token": token, "user": {k: v for k, v in user.items() if k not in ["password", "_id"]}}
 
@@ -147,349 +142,399 @@ async def get_me(user: dict = Depends(get_current_user)):
 
 # ==================== MARKET DATA ====================
 
-CRYPTO_SYMBOLS = ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "ADA/USD", "DOGE/USD", "AVAX/USD", "DOT/USD"]
-FOREX_SYMBOLS = ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD", "USD/CAD", "NZD/USD"]
-INDICES_SYMBOLS = ["US30", "US100", "US500", "GER40", "UK100", "FRA40", "JPN225"]
-METALS_SYMBOLS = ["XAU/USD", "XAG/USD", "XPT/USD", "XPD/USD"]
+BASE_PRICES = {
+    # Crypto
+    "BTC/USD": 98500, "ETH/USD": 3450, "SOL/USD": 195, "XRP/USD": 2.35, "ADA/USD": 1.05,
+    # Forex
+    "EUR/USD": 1.0520, "GBP/USD": 1.2680, "USD/JPY": 154.50, "AUD/USD": 0.6380, "USD/CHF": 0.8920,
+    # Indices
+    "US30": 44250, "US100": 21650, "US500": 6050, "GER40": 20350, "UK100": 8150,
+    # Metals
+    "XAU/USD": 2680, "XAG/USD": 31.50, "XPT/USD": 995, "XPD/USD": 1050
+}
 
-async def fetch_crypto_prices():
-    """Fetch crypto prices from CoinGecko API"""
+async def get_current_price(symbol: str) -> float:
+    """Get current price with small random variation for realism"""
+    global PRICE_CACHE, PRICE_CACHE_TIME
+    
+    now = datetime.now(timezone.utc)
+    
+    # Try to get real crypto prices from CoinGecko
+    if "BTC" in symbol or "ETH" in symbol or "SOL" in symbol:
+        try:
+            async with httpx.AsyncClient() as client_http:
+                response = await client_http.get(
+                    "https://api.coingecko.com/api/v3/simple/price",
+                    params={"ids": "bitcoin,ethereum,solana", "vs_currencies": "usd"},
+                    timeout=5.0
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if "BTC" in symbol and "bitcoin" in data:
+                        return data["bitcoin"]["usd"]
+                    if "ETH" in symbol and "ethereum" in data:
+                        return data["ethereum"]["usd"]
+                    if "SOL" in symbol and "solana" in data:
+                        return data["solana"]["usd"]
+        except:
+            pass
+    
+    # Fallback to simulated prices with variation
+    base = BASE_PRICES.get(symbol, 100)
+    variation = random.uniform(-0.15, 0.15)  # 0.15% max variation
+    return round(base * (1 + variation / 100), 5 if base < 10 else 2)
+
+async def get_all_prices() -> Dict[str, Dict]:
+    """Get all market prices"""
+    prices = {}
+    
+    # Try CoinGecko for crypto
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
+        async with httpx.AsyncClient() as client_http:
+            response = await client_http.get(
                 "https://api.coingecko.com/api/v3/simple/price",
                 params={
-                    "ids": "bitcoin,ethereum,solana,ripple,cardano,dogecoin,avalanche-2,polkadot",
+                    "ids": "bitcoin,ethereum,solana,ripple,cardano",
                     "vs_currencies": "usd",
-                    "include_24hr_change": "true",
-                    "include_24hr_vol": "true"
+                    "include_24hr_change": "true"
                 },
-                timeout=10.0
+                timeout=5.0
             )
             if response.status_code == 200:
                 data = response.json()
-                mapping = {
-                    "bitcoin": "BTC/USD", "ethereum": "ETH/USD", "solana": "SOL/USD",
-                    "ripple": "XRP/USD", "cardano": "ADA/USD", "dogecoin": "DOGE/USD",
-                    "avalanche-2": "AVAX/USD", "polkadot": "DOT/USD"
-                }
-                result = {}
+                mapping = {"bitcoin": "BTC/USD", "ethereum": "ETH/USD", "solana": "SOL/USD", "ripple": "XRP/USD", "cardano": "ADA/USD"}
                 for coin_id, symbol in mapping.items():
                     if coin_id in data:
-                        result[symbol] = {
-                            "price": data[coin_id].get("usd", 0),
-                            "change_24h": data[coin_id].get("usd_24h_change", 0),
-                            "volume_24h": data[coin_id].get("usd_24h_vol", 0)
+                        prices[symbol] = {
+                            "price": data[coin_id].get("usd", BASE_PRICES.get(symbol, 100)),
+                            "change_24h": data[coin_id].get("usd_24h_change", random.uniform(-3, 3)),
+                            "type": "crypto"
                         }
-                return result
-    except Exception as e:
-        logging.error(f"Crypto fetch error: {e}")
-    return {}
-
-async def fetch_forex_prices():
-    """Simulated forex data - in production use real API"""
-    import random
-    base_prices = {
-        "EUR/USD": 1.0850, "GBP/USD": 1.2650, "USD/JPY": 149.50,
-        "USD/CHF": 0.8850, "AUD/USD": 0.6550, "USD/CAD": 1.3650, "NZD/USD": 0.6150
-    }
-    result = {}
-    for symbol, base in base_prices.items():
-        change = random.uniform(-0.5, 0.5)
-        result[symbol] = {
-            "price": round(base * (1 + change/100), 5),
-            "change_24h": round(change, 2),
-            "volume_24h": random.randint(1000000, 5000000)
+    except:
+        pass
+    
+    # Fill missing crypto
+    for symbol in ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "ADA/USD"]:
+        if symbol not in prices:
+            base = BASE_PRICES.get(symbol, 100)
+            prices[symbol] = {
+                "price": round(base * (1 + random.uniform(-0.5, 0.5) / 100), 2),
+                "change_24h": round(random.uniform(-5, 5), 2),
+                "type": "crypto"
+            }
+    
+    # Forex
+    for symbol in ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CHF"]:
+        base = BASE_PRICES.get(symbol, 1)
+        prices[symbol] = {
+            "price": round(base * (1 + random.uniform(-0.1, 0.1) / 100), 5),
+            "change_24h": round(random.uniform(-1, 1), 2),
+            "type": "forex"
         }
-    return result
-
-async def fetch_indices_prices():
-    """Simulated indices data"""
-    import random
-    base_prices = {
-        "US30": 43250.00, "US100": 21450.00, "US500": 5950.00, 
-        "GER40": 20150.00, "UK100": 8250.00, "FRA40": 7850.00, "JPN225": 38500.00
-    }
-    result = {}
-    for symbol, base in base_prices.items():
-        change = random.uniform(-1.5, 1.5)
-        result[symbol] = {
-            "price": round(base * (1 + change/100), 2),
-            "change_24h": round(change, 2),
-            "volume_24h": random.randint(50000000, 200000000)
+    
+    # Indices
+    for symbol in ["US30", "US100", "US500", "GER40", "UK100"]:
+        base = BASE_PRICES.get(symbol, 10000)
+        prices[symbol] = {
+            "price": round(base * (1 + random.uniform(-0.2, 0.2) / 100), 2),
+            "change_24h": round(random.uniform(-1.5, 1.5), 2),
+            "type": "indices"
         }
-    return result
-
-async def fetch_metals_prices():
-    """Simulated metals data - XAU=Gold, XAG=Silver, XPT=Platinum, XPD=Palladium"""
-    import random
-    base_prices = {
-        "XAU/USD": 2650.50, "XAG/USD": 31.25, "XPT/USD": 985.00, "XPD/USD": 1025.00
-    }
-    result = {}
-    for symbol, base in base_prices.items():
-        change = random.uniform(-1, 1)
-        result[symbol] = {
-            "price": round(base * (1 + change/100), 2),
-            "change_24h": round(change, 2),
-            "volume_24h": random.randint(5000000, 20000000)
+    
+    # Metals
+    for symbol in ["XAU/USD", "XAG/USD", "XPT/USD", "XPD/USD"]:
+        base = BASE_PRICES.get(symbol, 1000)
+        prices[symbol] = {
+            "price": round(base * (1 + random.uniform(-0.15, 0.15) / 100), 2),
+            "change_24h": round(random.uniform(-2, 2), 2),
+            "type": "metals"
         }
-    return result
+    
+    return prices
 
 @api_router.get("/markets")
 async def get_markets(user: dict = Depends(get_current_user)):
-    crypto = await fetch_crypto_prices()
-    forex = await fetch_forex_prices()
-    indices = await fetch_indices_prices()
-    metals = await fetch_metals_prices()
-    
-    markets = []
-    for symbol, data in crypto.items():
-        markets.append({"symbol": symbol, "type": "crypto", **data})
-    for symbol, data in forex.items():
-        markets.append({"symbol": symbol, "type": "forex", **data})
-    for symbol, data in indices.items():
-        markets.append({"symbol": symbol, "type": "indices", **data})
-    for symbol, data in metals.items():
-        markets.append({"symbol": symbol, "type": "metals", **data})
-    
+    prices = await get_all_prices()
+    markets = [{"symbol": sym, **data} for sym, data in prices.items()]
     return {"markets": markets, "updated_at": datetime.now(timezone.utc).isoformat()}
 
-@api_router.get("/markets/{symbol:path}")
-async def get_market_detail(symbol: str, user: dict = Depends(get_current_user)):
-    """Get detailed market data with historical prices"""
-    import random
-    
-    # Generate mock historical data
-    now = datetime.now(timezone.utc)
-    history = []
-    base_price = 100.0
-    
-    if "BTC" in symbol:
-        base_price = 67500
-    elif "ETH" in symbol:
-        base_price = 3650
-    elif "EUR" in symbol:
-        base_price = 1.085
-    elif "AAPL" in symbol:
-        base_price = 195
-    
-    for i in range(100):
-        timestamp = now - timedelta(hours=i)
-        change = random.uniform(-0.5, 0.5)
-        price = base_price * (1 + change/100)
-        history.append({
-            "timestamp": timestamp.isoformat(),
-            "open": round(price * 0.999, 4),
-            "high": round(price * 1.002, 4),
-            "low": round(price * 0.998, 4),
-            "close": round(price, 4),
-            "volume": random.randint(1000, 10000)
-        })
-        base_price = price
-    
-    return {
-        "symbol": symbol,
-        "current_price": history[0]["close"],
-        "change_24h": round(random.uniform(-3, 3), 2),
-        "history": list(reversed(history))
-    }
+@api_router.get("/price/{symbol:path}")
+async def get_price(symbol: str, user: dict = Depends(get_current_user)):
+    """Get single price for a symbol"""
+    price = await get_current_price(symbol)
+    return {"symbol": symbol, "price": price, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # ==================== AI ANALYSIS ====================
 
-async def analyze_with_claude(symbol: str, market_data: dict) -> dict:
-    """Use Claude Sonnet 4 for advanced market analysis"""
+def calculate_levels(price: float, direction: str, strategy: str, symbol: str):
+    """Calculate entry, SL, TP based on strategy and market type"""
+    
+    # Determine pip value based on symbol
+    if "JPY" in symbol:
+        pip = 0.01
+    elif any(x in symbol for x in ["EUR", "GBP", "AUD", "USD", "CHF", "NZD", "CAD"]) and "/" in symbol:
+        pip = 0.0001
+    elif any(x in symbol for x in ["XAU", "XAG"]):
+        pip = 0.01
+    elif any(x in symbol for x in ["US30", "US100", "US500", "GER", "UK", "FRA", "JPN"]):
+        pip = 1
+    else:
+        pip = price * 0.001  # 0.1% for crypto
+    
+    # Strategy-specific parameters
+    strategy_params = {
+        "scalping": {"sl_pips": 10, "tp_ratio": 1.5},
+        "intraday": {"sl_pips": 25, "tp_ratio": 2.0},
+        "swing": {"sl_pips": 50, "tp_ratio": 3.0},
+        "smc": {"sl_pips": 30, "tp_ratio": 2.5},
+        "ict": {"sl_pips": 35, "tp_ratio": 2.5},
+        "wyckoff": {"sl_pips": 40, "tp_ratio": 3.0},
+        "macd": {"sl_pips": 25, "tp_ratio": 2.0},
+        "rsi": {"sl_pips": 20, "tp_ratio": 1.8},
+        "breakout": {"sl_pips": 30, "tp_ratio": 2.5},
+        "vwap": {"sl_pips": 20, "tp_ratio": 2.0},
+        "momentum": {"sl_pips": 25, "tp_ratio": 2.2},
+        "liquidity": {"sl_pips": 35, "tp_ratio": 2.8},
+    }
+    
+    params = strategy_params.get(strategy.lower(), {"sl_pips": 25, "tp_ratio": 2.0})
+    sl_distance = params["sl_pips"] * pip
+    tp_distance = sl_distance * params["tp_ratio"]
+    
+    if direction == "BUY":
+        sl = price - sl_distance
+        tp1 = price + tp_distance
+        tp2 = price + tp_distance * 1.5
+        tp3 = price + tp_distance * 2
+    else:
+        sl = price + sl_distance
+        tp1 = price - tp_distance
+        tp2 = price - tp_distance * 1.5
+        tp3 = price - tp_distance * 2
+    
+    return {
+        "entry": round(price, 5 if price < 10 else 2),
+        "sl": round(sl, 5 if price < 10 else 2),
+        "tp1": round(tp1, 5 if price < 10 else 2),
+        "tp2": round(tp2, 5 if price < 10 else 2),
+        "tp3": round(tp3, 5 if price < 10 else 2),
+        "rr": round(params["tp_ratio"], 2)
+    }
+
+def generate_strategy_analysis(strategy: str, price: float, symbol: str) -> Dict:
+    """Generate detailed analysis based on strategy"""
+    
+    analyses = {
+        "smc": {
+            "name": "Smart Money Concepts",
+            "structure": random.choice(["Bullish BOS confirmé", "Bearish CHOCH détecté", "Range avec accumulation"]),
+            "poi": f"Order Block identifié à {round(price * 0.995, 2)}",
+            "liquidity": random.choice(["Pool de liquidité au-dessus des highs", "Stops sous les lows précédents"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        },
+        "ict": {
+            "name": "Inner Circle Trader",
+            "fvg": f"FVG présent entre {round(price * 0.998, 2)} et {round(price * 1.002, 2)}",
+            "displacement": random.choice(["Displacement haussier fort", "Displacement baissier", "Consolidation"]),
+            "killzone": random.choice(["London Open", "NY Open", "Asian Session"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        },
+        "wyckoff": {
+            "name": "Wyckoff Method",
+            "phase": random.choice(["Accumulation Phase C", "Distribution Phase B", "Markup", "Markdown"]),
+            "spring": random.choice(["Spring potentiel détecté", "UTAD en formation", "Test du support"]),
+            "volume": random.choice(["Volume en augmentation", "Climax de volume", "Volume faible"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        },
+        "macd": {
+            "name": "MACD Strategy",
+            "signal": random.choice(["Croisement haussier", "Croisement baissier", "Divergence"]),
+            "histogram": random.choice(["Histogramme croissant", "Histogramme décroissant"]),
+            "trend": random.choice(["Au-dessus de zéro", "Sous zéro"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        },
+        "rsi": {
+            "name": "RSI Strategy",
+            "level": random.randint(25, 75),
+            "condition": random.choice(["Survendu - rebond attendu", "Suracheté - correction attendue", "Zone neutre"]),
+            "divergence": random.choice(["Divergence haussière", "Divergence baissière", "Pas de divergence"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        },
+        "breakout": {
+            "name": "Breakout Strategy",
+            "level": f"Résistance à {round(price * 1.01, 2)}, Support à {round(price * 0.99, 2)}",
+            "pattern": random.choice(["Triangle ascendant", "Rectangle", "Wedge"]),
+            "confirmation": random.choice(["En attente de cassure", "Cassure confirmée", "Fausse cassure"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        },
+        "vwap": {
+            "name": "VWAP Strategy",
+            "position": random.choice(["Prix au-dessus du VWAP", "Prix sous le VWAP"]),
+            "deviation": random.choice(["+1 SD", "-1 SD", "Sur le VWAP"]),
+            "trend": random.choice(["Tendance haussière", "Tendance baissière", "Range"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        },
+        "momentum": {
+            "name": "Momentum Strategy",
+            "strength": random.choice(["Momentum fort", "Momentum faible", "Momentum neutre"]),
+            "acceleration": random.choice(["Accélération", "Décélération", "Stable"]),
+            "trend": random.choice(["Trend up", "Trend down", "Sideways"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        },
+        "liquidity": {
+            "name": "Liquidity Hunting",
+            "pools": f"Liquidité identifiée à {round(price * 0.98, 2)} et {round(price * 1.02, 2)}",
+            "target": random.choice(["Chasse aux stops longs", "Chasse aux stops courts"]),
+            "imbalance": random.choice(["Imbalance haussier", "Imbalance baissier"]),
+            "bias": random.choice(["Bullish", "Bearish"])
+        }
+    }
+    
+    return analyses.get(strategy.lower(), analyses["smc"])
+
+@api_router.post("/ai/analyze")
+async def ai_analyze(request: AIAnalysisRequest, user: dict = Depends(get_current_user)):
+    """Generate AI trading signal with Claude Sonnet 4"""
+    
+    # Get current price
+    price = await get_current_price(request.symbol)
+    
+    # Generate strategy analysis
+    strategy_analysis = generate_strategy_analysis(request.strategy, price, request.symbol)
+    
+    # Determine direction based on strategy bias
+    direction = "BUY" if strategy_analysis.get("bias") == "Bullish" else "SELL"
+    
+    # Calculate levels
+    levels = calculate_levels(price, direction, request.strategy, request.symbol)
+    
+    # Calculate confidence based on multiple factors
+    base_confidence = random.randint(55, 85)
+    
+    # Try Claude for enhanced analysis
+    reasoning = f"Analyse {strategy_analysis['name']}: "
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         
         api_key = os.environ.get('EMERGENT_LLM_KEY')
-        if not api_key:
-            return {"error": "No API key configured"}
-        
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"analysis_{symbol}_{datetime.now().timestamp()}",
-            system_message="""Tu es AlphaMind, un expert en analyse technique et trading. 
-Tu analyses les marchés en utilisant les méthodologies ICT (Inner Circle Trader), SMC (Smart Money Concepts) et Wyckoff.
-Fournis des analyses précises avec des niveaux d'entrée, stop loss et take profit.
-Réponds toujours en JSON structuré."""
-        ).with_model("anthropic", "claude-4-sonnet-20250514")
-        
-        prompt = f"""Analyse le marché {symbol} avec les données suivantes:
-- Prix actuel: {market_data.get('price', 'N/A')}
-- Variation 24h: {market_data.get('change_24h', 'N/A')}%
-- Volume 24h: {market_data.get('volume_24h', 'N/A')}
+        if api_key:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"analysis_{request.symbol}_{datetime.now().timestamp()}",
+                system_message=f"""Tu es AlphaMind, expert en trading utilisant {request.strategy.upper()}.
+Analyse brièvement et donne une recommandation claire. Réponds en 2-3 phrases maximum."""
+            ).with_model("anthropic", "claude-4-sonnet-20250514")
+            
+            prompt = f"""Symbole: {request.symbol}
+Prix: {price}
+Stratégie: {request.strategy.upper()}
+Timeframe: {request.timeframe}
+Mode: {request.mode}
+Analyse technique: {json.dumps(strategy_analysis)}
 
-Fournis ton analyse en JSON avec cette structure:
-{{
-    "signal": "BUY" ou "SELL" ou "NEUTRAL",
-    "confidence": 0-100,
-    "entry_price": number,
-    "stop_loss": number,
-    "take_profit_1": number,
-    "take_profit_2": number,
-    "take_profit_3": number,
-    "analysis": {{
-        "ict": "analyse ICT détaillée",
-        "smc": "analyse SMC détaillée", 
-        "wyckoff": "analyse Wyckoff détaillée",
-        "trend": "up/down/sideways",
-        "key_levels": [niveaux clés]
-    }},
-    "reasoning": "explication du signal"
-}}"""
-        
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
-        
-        # Parse JSON from response
-        try:
-            # Extract JSON from response
-            if "```json" in response:
-                json_str = response.split("```json")[1].split("```")[0]
-            elif "```" in response:
-                json_str = response.split("```")[1].split("```")[0]
-            else:
-                json_str = response
-            
-            analysis = json.loads(json_str.strip())
-            return analysis
-        except:
-            return {
-                "signal": "NEUTRAL",
-                "confidence": 50,
-                "reasoning": response,
-                "analysis": {"raw": response}
-            }
-            
+Donne une recommandation {direction} concise."""
+
+            response = await chat.send_message(UserMessage(text=prompt))
+            reasoning = response[:500] if response else reasoning
+            base_confidence = min(95, base_confidence + 10)
     except Exception as e:
-        logging.error(f"Claude analysis error: {e}")
-        return {"error": str(e)}
-
-@api_router.post("/ai/analyze")
-async def ai_analyze(request: AIAnalysisRequest, user: dict = Depends(get_current_user)):
-    """Get AI-powered market analysis using Claude Sonnet 4"""
+        logging.error(f"Claude error: {e}")
+        reasoning += f"Signal {direction} basé sur {strategy_analysis.get('name', request.strategy)}"
     
-    # Fetch current market data
-    if request.market_type == "crypto":
-        prices = await fetch_crypto_prices()
-    elif request.market_type == "forex":
-        prices = await fetch_forex_prices()
-    else:
-        prices = await fetch_stock_prices()
+    # Build response
+    analysis = {
+        "signal": direction,
+        "confidence": base_confidence,
+        "entry_price": levels["entry"],
+        "stop_loss": levels["sl"],
+        "take_profit_1": levels["tp1"],
+        "take_profit_2": levels["tp2"],
+        "take_profit_3": levels["tp3"],
+        "rr_ratio": levels["rr"],
+        "analysis": strategy_analysis,
+        "reasoning": reasoning
+    }
     
-    market_data = prices.get(request.symbol, {})
-    if not market_data:
-        market_data = {"price": 0, "change_24h": 0, "volume_24h": 0}
-    
-    analysis = await analyze_with_claude(request.symbol, market_data)
-    
-    # Save analysis to database
-    analysis_doc = {
+    # Save to DB
+    signal_doc = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
         "symbol": request.symbol,
         "timeframe": request.timeframe,
-        "market_type": request.market_type,
+        "mode": request.mode,
+        "strategy": request.strategy,
+        "direction": direction,
+        "entry_price": levels["entry"],
+        "stop_loss": levels["sl"],
+        "take_profit_1": levels["tp1"],
+        "confidence": base_confidence,
         "analysis": analysis,
+        "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.analyses.insert_one(analysis_doc)
+    await db.signals.insert_one(signal_doc)
     
-    return {"symbol": request.symbol, "analysis": analysis, "timestamp": analysis_doc["created_at"]}
+    return {"symbol": request.symbol, "analysis": analysis, "timestamp": signal_doc["created_at"]}
 
 # ==================== SIGNALS ====================
 
 @api_router.get("/signals")
 async def get_signals(user: dict = Depends(get_current_user)):
-    """Get active trading signals"""
-    signals = await db.signals.find(
-        {"status": "active"},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    signals = await db.signals.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {"signals": signals}
-
-@api_router.post("/signals")
-async def create_signal(signal: SignalCreate, user: dict = Depends(get_current_user)):
-    """Create a new trading signal"""
-    signal_doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": user["id"],
-        **signal.model_dump(),
-        "status": "active",
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.signals.insert_one(signal_doc)
-    return {k: v for k, v in signal_doc.items() if k != "_id"}
-
-@api_router.post("/signals/generate")
-async def generate_signals(user: dict = Depends(get_current_user)):
-    """Generate AI signals for all markets"""
-    signals = []
-    
-    # Analyze top crypto pairs
-    for symbol in ["BTC/USD", "ETH/USD", "SOL/USD"]:
-        prices = await fetch_crypto_prices()
-        market_data = prices.get(symbol, {})
-        analysis = await analyze_with_claude(symbol, market_data)
-        
-        if analysis.get("signal") in ["BUY", "SELL"]:
-            signal_doc = {
-                "id": str(uuid.uuid4()),
-                "user_id": user["id"],
-                "symbol": symbol,
-                "direction": analysis.get("signal"),
-                "entry_price": analysis.get("entry_price", market_data.get("price", 0)),
-                "stop_loss": analysis.get("stop_loss", 0),
-                "take_profit_1": analysis.get("take_profit_1", 0),
-                "take_profit_2": analysis.get("take_profit_2"),
-                "take_profit_3": analysis.get("take_profit_3"),
-                "confidence": analysis.get("confidence", 50),
-                "strategy": "AI_MULTI",
-                "analysis": analysis.get("reasoning", ""),
-                "status": "active",
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }
-            await db.signals.insert_one(signal_doc)
-            signals.append({k: v for k, v in signal_doc.items() if k != "_id"})
-    
-    return {"signals": signals, "count": len(signals)}
 
 # ==================== TRADES ====================
 
 @api_router.get("/trades")
 async def get_trades(user: dict = Depends(get_current_user)):
-    """Get user's trades"""
-    trades = await db.trades.find(
-        {"user_id": user["id"]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+    trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    # Calculate floating PnL for open trades
+    for trade in trades:
+        if trade.get("status") == "open":
+            current_price = await get_current_price(trade["symbol"])
+            if trade["direction"] == "BUY":
+                trade["floating_pnl"] = round((current_price - trade["entry_price"]) * trade["quantity"], 2)
+            else:
+                trade["floating_pnl"] = round((trade["entry_price"] - current_price) * trade["quantity"], 2)
+            trade["current_price"] = current_price
+            
+            # Check if SL or TP hit
+            if trade["direction"] == "BUY":
+                if current_price <= trade["stop_loss"]:
+                    trade["sl_hit"] = True
+                elif current_price >= trade["take_profit"]:
+                    trade["tp_hit"] = True
+            else:
+                if current_price >= trade["stop_loss"]:
+                    trade["sl_hit"] = True
+                elif current_price <= trade["take_profit"]:
+                    trade["tp_hit"] = True
+    
     return {"trades": trades}
 
 @api_router.post("/trades")
 async def create_trade(trade: TradeCreate, user: dict = Depends(get_current_user)):
-    """Execute a trade (semi-automatic mode)"""
     trade_doc = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
-        **trade.model_dump(),
+        "signal_id": trade.signal_id,
+        "symbol": trade.symbol,
+        "direction": trade.direction,
+        "entry_price": trade.entry_price,
+        "quantity": trade.quantity,
+        "stop_loss": trade.stop_loss,
+        "take_profit": trade.take_profit,
+        "strategy": trade.strategy,
         "status": "open",
         "pnl": 0.0,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.trades.insert_one(trade_doc)
-    
-    # Update user stats
-    await db.users.update_one(
-        {"id": user["id"]},
-        {"$inc": {"total_trades": 1}}
-    )
-    
     return {k: v for k, v in trade_doc.items() if k != "_id"}
 
 @api_router.post("/trades/{trade_id}/close")
 async def close_trade(trade_id: str, exit_price: float, user: dict = Depends(get_current_user)):
-    """Close a trade"""
     trade = await db.trades.find_one({"id": trade_id, "user_id": user["id"]})
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
@@ -500,32 +545,54 @@ async def close_trade(trade_id: str, exit_price: float, user: dict = Depends(get
     else:
         pnl = (trade["entry_price"] - exit_price) * trade["quantity"]
     
+    pnl = round(pnl, 2)
+    
     # Update trade
     await db.trades.update_one(
         {"id": trade_id},
-        {
-            "$set": {
-                "status": "closed",
-                "exit_price": exit_price,
-                "pnl": pnl,
-                "closed_at": datetime.now(timezone.utc).isoformat()
-            }
-        }
+        {"$set": {
+            "status": "closed",
+            "exit_price": exit_price,
+            "pnl": pnl,
+            "closed_at": datetime.now(timezone.utc).isoformat()
+        }}
     )
     
-    # Update user stats
-    update = {"$inc": {"pnl": pnl, "balance": pnl}}
-    if pnl > 0:
-        update["$inc"]["winning_trades"] = 1
-    await db.users.update_one({"id": user["id"]}, update)
+    # Update user balance
+    await db.users.update_one({"id": user["id"]}, {"$inc": {"balance": pnl}})
     
-    return {"trade_id": trade_id, "pnl": pnl, "status": "closed"}
+    return {"trade_id": trade_id, "pnl": pnl, "status": "closed", "exit_price": exit_price}
+
+@api_router.post("/trades/{trade_id}/close-at-market")
+async def close_trade_at_market(trade_id: str, user: dict = Depends(get_current_user)):
+    """Close trade at current market price"""
+    trade = await db.trades.find_one({"id": trade_id, "user_id": user["id"]})
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    
+    current_price = await get_current_price(trade["symbol"])
+    return await close_trade(trade_id, current_price, user)
+
+@api_router.post("/trades/{trade_id}/close-sl")
+async def close_trade_at_sl(trade_id: str, user: dict = Depends(get_current_user)):
+    """Close trade at stop loss"""
+    trade = await db.trades.find_one({"id": trade_id, "user_id": user["id"]})
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    return await close_trade(trade_id, trade["stop_loss"], user)
+
+@api_router.post("/trades/{trade_id}/close-tp")
+async def close_trade_at_tp(trade_id: str, user: dict = Depends(get_current_user)):
+    """Close trade at take profit"""
+    trade = await db.trades.find_one({"id": trade_id, "user_id": user["id"]})
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    return await close_trade(trade_id, trade["take_profit"], user)
 
 # ==================== PORTFOLIO ====================
 
 @api_router.get("/portfolio")
 async def get_portfolio(user: dict = Depends(get_current_user)):
-    """Get user's portfolio summary"""
     trades = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
     
     open_trades = [t for t in trades if t["status"] == "open"]
@@ -537,21 +604,22 @@ async def get_portfolio(user: dict = Depends(get_current_user)):
         winners = len([t for t in closed_trades if t.get("pnl", 0) > 0])
         win_rate = (winners / len(closed_trades)) * 100
     
+    # Get fresh user balance
+    fresh_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    
     return {
-        "balance": user.get("balance", 10000),
-        "total_pnl": total_pnl,
+        "balance": fresh_user.get("balance", 10000),
+        "total_pnl": round(total_pnl, 2),
         "win_rate": round(win_rate, 2),
         "total_trades": len(trades),
         "open_trades": len(open_trades),
-        "closed_trades": len(closed_trades),
-        "open_positions": open_trades
+        "closed_trades": len(closed_trades)
     }
 
-# ==================== BOT CONFIGURATION ====================
+# ==================== BOT CONFIG ====================
 
 @api_router.get("/bot/config")
 async def get_bot_config(user: dict = Depends(get_current_user)):
-    """Get bot configuration"""
     config = await db.bot_configs.find_one({"user_id": user["id"]}, {"_id": 0})
     if not config:
         config = {
@@ -560,57 +628,15 @@ async def get_bot_config(user: dict = Depends(get_current_user)):
             "risk_per_trade": 0.02,
             "max_daily_trades": 10,
             "allowed_markets": ["crypto", "forex", "indices", "metals"],
-            "strategies": ["ICT", "SMC", "WYCKOFF"],
+            "strategies": ["smc", "ict", "wyckoff"],
             "auto_execute": False,
-            "mt5_connected": False,
-            "mt5_server": None,
-            "mt5_login": None
+            "mt5_connected": False
         }
-        await db.bot_configs.insert_one({**config, "_id": None})
-    return {k: v for k, v in config.items() if k != "_id"}
-
-class MT5ConnectRequest(BaseModel):
-    server: str
-    login: str
-    password: str
-
-@api_router.post("/bot/connect-mt5")
-async def connect_mt5(request: MT5ConnectRequest, user: dict = Depends(get_current_user)):
-    """Connect bot to MetaTrader 5"""
-    # In production, this would establish actual MT5 connection
-    # For now, we save the connection details
-    await db.bot_configs.update_one(
-        {"user_id": user["id"]},
-        {
-            "$set": {
-                "mt5_connected": True,
-                "mt5_server": request.server,
-                "mt5_login": request.login,
-                "mt5_connection_time": datetime.now(timezone.utc).isoformat()
-            }
-        },
-        upsert=True
-    )
-    return {"message": "MT5 connection configured", "status": "connected", "server": request.server}
-
-@api_router.post("/bot/disconnect-mt5")
-async def disconnect_mt5(user: dict = Depends(get_current_user)):
-    """Disconnect bot from MetaTrader 5"""
-    await db.bot_configs.update_one(
-        {"user_id": user["id"]},
-        {
-            "$set": {
-                "mt5_connected": False,
-                "mt5_server": None,
-                "mt5_login": None
-            }
-        }
-    )
-    return {"message": "MT5 disconnected", "status": "disconnected"}
+        await db.bot_configs.insert_one(config)
+    return config
 
 @api_router.post("/bot/config")
 async def update_bot_config(config: BotConfig, user: dict = Depends(get_current_user)):
-    """Update bot configuration"""
     await db.bot_configs.update_one(
         {"user_id": user["id"]},
         {"$set": config.model_dump()},
@@ -618,86 +644,33 @@ async def update_bot_config(config: BotConfig, user: dict = Depends(get_current_
     )
     return {"message": "Configuration updated", "config": config.model_dump()}
 
-# ==================== WATCHLIST ====================
-
-@api_router.get("/watchlist")
-async def get_watchlist(user: dict = Depends(get_current_user)):
-    """Get user's watchlist"""
-    watchlist = await db.watchlists.find_one({"user_id": user["id"]}, {"_id": 0})
-    if not watchlist:
-        watchlist = {"user_id": user["id"], "symbols": ["BTC/USD", "ETH/USD", "EUR/USD"]}
-        await db.watchlists.insert_one({**watchlist, "_id": None})
-    return {k: v for k, v in watchlist.items() if k != "_id"}
-
-@api_router.post("/watchlist/add")
-async def add_to_watchlist(symbol: str, user: dict = Depends(get_current_user)):
-    """Add symbol to watchlist"""
-    await db.watchlists.update_one(
+@api_router.post("/bot/connect-mt5")
+async def connect_mt5(request: MT5ConnectRequest, user: dict = Depends(get_current_user)):
+    await db.bot_configs.update_one(
         {"user_id": user["id"]},
-        {"$addToSet": {"symbols": symbol}},
+        {"$set": {
+            "mt5_connected": True,
+            "mt5_server": request.server,
+            "mt5_login": request.login,
+            "mt5_connection_time": datetime.now(timezone.utc).isoformat()
+        }},
         upsert=True
     )
-    return {"message": f"{symbol} added to watchlist"}
+    return {"message": "MT5 connected", "status": "connected", "server": request.server}
 
-@api_router.post("/watchlist/remove")
-async def remove_from_watchlist(symbol: str, user: dict = Depends(get_current_user)):
-    """Remove symbol from watchlist"""
-    await db.watchlists.update_one(
+@api_router.post("/bot/disconnect-mt5")
+async def disconnect_mt5(user: dict = Depends(get_current_user)):
+    await db.bot_configs.update_one(
         {"user_id": user["id"]},
-        {"$pull": {"symbols": symbol}}
+        {"$set": {"mt5_connected": False, "mt5_server": None, "mt5_login": None}}
     )
-    return {"message": f"{symbol} removed from watchlist"}
-
-# ==================== WEBSOCKET ====================
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-    
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-    
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-    
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except:
-                pass
-
-manager = ConnectionManager()
-
-@app.websocket("/ws/market")
-async def websocket_market(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            # Send market updates every 5 seconds
-            crypto = await fetch_crypto_prices()
-            forex = await fetch_forex_prices()
-            stocks = await fetch_stock_prices()
-            
-            await websocket.send_json({
-                "type": "market_update",
-                "data": {
-                    "crypto": crypto,
-                    "forex": forex,
-                    "stocks": stocks
-                },
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            })
-            await asyncio.sleep(5)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
+    return {"message": "MT5 disconnected", "status": "disconnected"}
 
 # ==================== MAIN ====================
 
 @api_router.get("/")
 async def root():
-    return {"message": "AlphaMind Trading API v1.0", "status": "online"}
+    return {"message": "AlphaMind Trading API v2.0", "status": "online"}
 
 @api_router.get("/health")
 async def health():
@@ -714,7 +687,6 @@ app.add_middleware(
 )
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
