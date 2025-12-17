@@ -232,7 +232,7 @@ async def get_markets(user: dict = Depends(get_current_user)):
     
     return {"markets": markets, "updated_at": datetime.now(timezone.utc).isoformat()}
 
-@api_router.get("/markets/{symbol}")
+@api_router.get("/markets/{symbol:path}")
 async def get_market_detail(symbol: str, user: dict = Depends(get_current_user)):
     """Get detailed market data with historical prices"""
     import random
