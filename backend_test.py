@@ -131,20 +131,25 @@ class AlphaMindAPITester:
             markets = markets_data['markets']
             print(f"   Found {len(markets)} markets")
             
-            # Test market types
+            # Test market types - updated to match actual implementation
             crypto_markets = [m for m in markets if m['type'] == 'crypto']
             forex_markets = [m for m in markets if m['type'] == 'forex']
-            stock_markets = [m for m in markets if m['type'] == 'stocks']
+            indices_markets = [m for m in markets if m['type'] == 'indices']
+            metals_markets = [m for m in markets if m['type'] == 'metals']
+            futures_markets = [m for m in markets if m['type'] == 'futures']
             
-            print(f"   Crypto: {len(crypto_markets)}, Forex: {len(forex_markets)}, Stocks: {len(stock_markets)}")
+            print(f"   Crypto: {len(crypto_markets)}, Forex: {len(forex_markets)}")
+            print(f"   Indices: {len(indices_markets)}, Metals: {len(metals_markets)}, Futures: {len(futures_markets)}")
             
-            # Test individual market detail
+            # Test individual price endpoint
             if markets:
                 test_symbol = markets[0]['symbol']
+                # URL encode the symbol for path parameter
+                encoded_symbol = test_symbol.replace('/', '%2F')
                 self.run_test(
-                    f"Get Market Detail ({test_symbol})", 
+                    f"Get Price ({test_symbol})", 
                     "GET", 
-                    f"markets/{test_symbol}", 
+                    f"price/{encoded_symbol}", 
                     200
                 )
 
