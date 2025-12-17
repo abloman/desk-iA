@@ -289,8 +289,12 @@ def calculate_levels(price: float, direction: str, strategy: str, symbol: str):
         pip = 0.10  # Gold moves in 10 cents
     elif "XAG" in symbol:
         pip = 0.01  # Silver moves in 1 cent
-    elif any(x in symbol for x in ["US30", "US100", "US500"]):
-        pip = 1.0  # Indices move in points
+    elif any(x in symbol for x in ["US30", "US100", "US500", "ES", "NQ"]):
+        pip = 1.0  # Indices and index futures move in points
+    elif symbol == "CL":
+        pip = 0.01  # Crude oil moves in cents
+    elif symbol in ["GC", "SI"]:
+        pip = 0.10  # Gold/Silver futures
     elif any(x in symbol for x in ["GER", "UK", "FRA", "JPN"]):
         pip = 1.0
     elif "BTC" in symbol:
