@@ -845,9 +845,207 @@ async def disconnect_mt5(user: dict = Depends(get_current_user)):
 
 # ==================== MAIN ====================
 
+# ==================== MT5 INTEGRATION (Windows Ready) ====================
+# This code is prepared for Windows deployment with MetaTrader5 library
+# Currently runs in simulation mode on Linux
+
+MT5_AVAILABLE = False
+try:
+    import MetaTrader5 as mt5
+    MT5_AVAILABLE = True
+except ImportError:
+    logging.info("MT5 library not available - running in simulation mode")
+
+class MT5Manager:
+    """MetaTrader5 integration manager - Windows compatible"""
+    
+    def __init__(self):
+        self.connected = False
+        self.account_info = None
+    
+    async def connect(self, server: str, login: str, password: str) -> Dict:
+        """Connect to MT5 terminal"""
+        if MT5_AVAILABLE:
+            # Real MT5 connection (Windows only)
+            if not mt5.initialize():
+                return {"success": False, "error": "MT5 initialization failed"}
+            
+            authorized = mt5.login(int(login), password=password, server=server)
+            if authorized:
+                self.connected = True
+                self.account_info = mt5.account_info()._asdict()
+                return {
+                    "success": True,
+                    "account": {
+                        "login": self.account_info["login"],
+                        "balance": self.account_info["balance"],
+                        "equity": self.account_info["equity"],
+                        "server": server
+                    }
+                }
+            else:
+                return {"success": False, "error": f"Login failed: {mt5.last_error()}"}
+        else:
+            # Simulation mode (Linux/Mac)
+            self.connected = True
+            self.account_info = {
+                "login": login,
+                "balance": 10000,
+                "equity": 10000,
+                "server": server,
+                "mode": "simulation"
+            }
+            return {"success": True, "account": self.account_info, "simulation": True}
+    
+    async def disconnect(self):
+        """Disconnect from MT5"""
+        if MT5_AVAILABLE and self.connected:
+            mt5.shutdown()
+        self.connected = False
+        return {"success": True}
+    
+    async def get_symbol_price(self, symbol: str) -> Dict:
+        """Get current price for symbol"""
+        if MT5_AVAILABLE and self.connected:
+            tick = mt5.symbol_info_tick(symbol)
+            if tick:
+                return {"bid": tick.bid, "ask": tick.ask, "time": tick.time}
+        # Fallback to our price system
+        price = await get_current_price(symbol)
+        spread = price * 0.0002
+        return {"bid": price, "ask": price + spread, "time": datetime.now(timezone.utc).isoformat()}
+    
+    async def place_order(self, symbol: str, order_type: str, volume: float, 
+                         sl: float = None, tp: float = None) -> Dict:
+        """Place order on MT5"""
+        if MT5_AVAILABLE and self.connected:
+            # Get symbol info
+            symbol_info = mt5.symbol_info(symbol)
+            if symbol_info is None:
+                return {"success": False, "error": f"Symbol {symbol} not found"}
+            
+            point = symbol_info.point
+            price = mt5.symbol_info_tick(symbol).ask if order_type == "BUY" else mt5.symbol_info_tick(symbol).bid
+            
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": volume,
+                "type": mt5.ORDER_TYPE_BUY if order_type == "BUY" else mt5.ORDER_TYPE_SELL,
+                "price": price,
+                "sl": sl,
+                "tp": tp,
+                "magic": 234000,
+                "comment": "AlphaMind Bot",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+            
+            result = mt5.order_send(request)
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                return {"success": False, "error": f"Order failed: {result.comment}"}
+            
+            return {
+                "success": True,
+                "ticket": result.order,
+                "price": result.price,
+                "volume": result.volume
+            }
+        else:
+            # Simulation mode
+            return {
+                "success": True,
+                "ticket": random.randint(100000, 999999),
+                "price": await get_current_price(symbol),
+                "volume": volume,
+                "simulation": True
+            }
+    
+    async def close_position(self, ticket: int) -> Dict:
+        """Close position on MT5"""
+        if MT5_AVAILABLE and self.connected:
+            position = mt5.positions_get(ticket=ticket)
+            if position:
+                pos = position[0]
+                request = {
+                    "action": mt5.TRADE_ACTION_DEAL,
+                    "position": ticket,
+                    "symbol": pos.symbol,
+                    "volume": pos.volume,
+                    "type": mt5.ORDER_TYPE_SELL if pos.type == 0 else mt5.ORDER_TYPE_BUY,
+                    "price": mt5.symbol_info_tick(pos.symbol).bid if pos.type == 0 else mt5.symbol_info_tick(pos.symbol).ask,
+                    "magic": 234000,
+                    "comment": "AlphaMind Close",
+                }
+                result = mt5.order_send(request)
+                return {"success": result.retcode == mt5.TRADE_RETCODE_DONE, "profit": pos.profit}
+        return {"success": True, "simulation": True}
+
+mt5_manager = MT5Manager()
+
+@api_router.post("/mt5/connect")
+async def mt5_connect(request: MT5ConnectRequest, user: dict = Depends(get_current_user)):
+    """Connect to MT5 terminal"""
+    result = await mt5_manager.connect(request.server, request.login, request.password)
+    
+    if result["success"]:
+        await db.bot_configs.update_one(
+            {"user_id": user["id"]},
+            {"$set": {
+                "mt5_connected": True,
+                "mt5_server": request.server,
+                "mt5_login": request.login,
+                "mt5_simulation": result.get("simulation", False)
+            }},
+            upsert=True
+        )
+    
+    return result
+
+@api_router.post("/mt5/disconnect")
+async def mt5_disconnect(user: dict = Depends(get_current_user)):
+    """Disconnect from MT5"""
+    result = await mt5_manager.disconnect()
+    await db.bot_configs.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"mt5_connected": False}}
+    )
+    return result
+
+@api_router.post("/mt5/place-order")
+async def mt5_place_order(
+    symbol: str, 
+    order_type: str, 
+    volume: float,
+    sl: float = None,
+    tp: float = None,
+    user: dict = Depends(get_current_user)
+):
+    """Place order via MT5"""
+    if not mt5_manager.connected:
+        raise HTTPException(status_code=400, detail="MT5 not connected")
+    return await mt5_manager.place_order(symbol, order_type, volume, sl, tp)
+
+@api_router.get("/strategies")
+async def get_strategies():
+    """Get list of available advanced strategies"""
+    return {
+        "strategies": [
+            {
+                "id": key,
+                "name": value["name"],
+                "description": value["description"],
+                "min_rr": value["min_rr"]
+            }
+            for key, value in ADVANCED_STRATEGIES.items()
+        ]
+    }
+
+# ==================== MAIN ====================
+
 @api_router.get("/")
 async def root():
-    return {"message": "AlphaMind Trading API v2.0", "status": "online"}
+    return {"message": "AlphaMind Trading API v3.0", "status": "online", "mt5_available": MT5_AVAILABLE}
 
 @api_router.get("/health")
 async def health():
