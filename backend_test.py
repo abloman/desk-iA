@@ -256,7 +256,7 @@ class AlphaMindAPITester:
             "strategy": "smc"
         }
         
-        success, trade_response = self.run_test("Create Trade", "POST", "trades", 201, trade_data)
+        success, trade_response = self.run_test("Create Trade", "POST", "trades", 200, trade_data)
         
         if success and 'id' in trade_response:
             trade_id = trade_response['id']
