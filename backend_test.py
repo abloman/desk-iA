@@ -235,6 +235,14 @@ class AlphaMindAPITester:
         if success:
             trades = trades_data.get('trades', [])
             print(f"   Found {len(trades)} existing trades")
+            
+            # Check for open trades with floating PnL
+            open_trades = [t for t in trades if t.get('status') == 'open']
+            if open_trades:
+                print(f"   Open trades: {len(open_trades)}")
+                for trade in open_trades[:2]:  # Show first 2
+                    pnl = trade.get('floating_pnl', 0)
+                    print(f"     {trade.get('symbol')} {trade.get('direction')}: PnL ${pnl}")
         
         # Create a test trade
         trade_data = {
@@ -242,22 +250,24 @@ class AlphaMindAPITester:
             "symbol": "BTC/USD",
             "direction": "BUY",
             "entry_price": 67500.0,
-            "quantity": 0.1,
+            "quantity": 1.0,
             "stop_loss": 65000.0,
-            "take_profit": 70000.0
+            "take_profit": 70000.0,
+            "strategy": "smc"
         }
         
-        success, trade_response = self.run_test("Create Trade", "POST", "trades", 200, trade_data)
+        success, trade_response = self.run_test("Create Trade", "POST", "trades", 201, trade_data)
         
         if success and 'id' in trade_response:
             trade_id = trade_response['id']
+            self.created_trade_id = trade_id
             print(f"   Created trade with ID: {trade_id}")
             
-            # Test closing the trade
+            # Test different close methods
             self.run_test(
-                "Close Trade", 
+                "Close Trade at Market", 
                 "POST", 
-                f"trades/{trade_id}/close?exit_price=68000", 
+                f"trades/{trade_id}/close-at-market", 
                 200
             )
 
