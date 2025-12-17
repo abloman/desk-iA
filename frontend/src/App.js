@@ -499,7 +499,8 @@ function PerformancePage() {
       width: equityChartRef.current.clientWidth,
       height: 250,
       rightPriceScale: { borderColor: '#334155' },
-      timeScale: { borderColor: '#334155', timeVisible: true },
+      timeScale: { borderColor: '#334155', timeVisible: true, localization: { locale: 'fr-FR' } },
+      localization: { locale: 'fr-FR' },
     });
     chartInstanceRef.current = chart;
 
