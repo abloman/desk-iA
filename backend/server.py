@@ -275,38 +275,212 @@ async def get_price(symbol: str, user: dict = Depends(get_current_user)):
     price = await get_current_price(symbol)
     return {"symbol": symbol, "price": price, "timestamp": datetime.now(timezone.utc).isoformat()}
 
-# ==================== VOLATILITY & MARKET CONDITIONS ====================
+# ==================== REAL MARKET DATA & STRUCTURE ANALYSIS ====================
 
-def calculate_volatility(symbol: str, price: float) -> Dict:
-    """Calculate market volatility based on symbol type and simulated ATR"""
-    volatility_map = {
-        "BTC/USD": {"atr_pct": 2.5, "session": "24h", "type": "crypto"},
-        "ETH/USD": {"atr_pct": 3.0, "session": "24h", "type": "crypto"},
-        "SOL/USD": {"atr_pct": 4.5, "session": "24h", "type": "crypto"},
-        "XRP/USD": {"atr_pct": 4.0, "session": "24h", "type": "crypto"},
-        "ADA/USD": {"atr_pct": 4.2, "session": "24h", "type": "crypto"},
-        "EUR/USD": {"atr_pct": 0.5, "session": "london_ny", "type": "forex"},
-        "GBP/USD": {"atr_pct": 0.6, "session": "london_ny", "type": "forex"},
-        "USD/JPY": {"atr_pct": 0.55, "session": "asian_london", "type": "forex"},
-        "XAU/USD": {"atr_pct": 1.2, "session": "london_ny", "type": "metals"},
-        "US30": {"atr_pct": 0.8, "session": "ny", "type": "indices"},
-        "US100": {"atr_pct": 1.0, "session": "ny", "type": "indices"},
-        "ES": {"atr_pct": 0.9, "session": "ny", "type": "futures"},
-        "NQ": {"atr_pct": 1.1, "session": "ny", "type": "futures"},
-        "CL": {"atr_pct": 2.0, "session": "ny", "type": "futures"},
-        "GC": {"atr_pct": 1.0, "session": "ny", "type": "futures"},
-    }
+CRYPTO_COINGECKO_IDS = {
+    "BTC/USD": "bitcoin", "ETH/USD": "ethereum", "SOL/USD": "solana",
+    "XRP/USD": "ripple", "ADA/USD": "cardano"
+}
+
+async def fetch_ohlc_data(symbol: str, days: int = 1) -> List[Dict]:
+    """Fetch real OHLC data from CoinGecko"""
+    coin_id = CRYPTO_COINGECKO_IDS.get(symbol)
+    if not coin_id:
+        return []
     
-    base = volatility_map.get(symbol, {"atr_pct": 1.5, "session": "24h", "type": "other"})
-    # Add randomness to simulate real market conditions
-    current_atr = price * (base["atr_pct"] / 100) * random.uniform(0.8, 1.2)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc",
+                params={"vs_currency": "usd", "days": days}
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return [{"time": d[0], "open": d[1], "high": d[2], "low": d[3], "close": d[4]} for d in data]
+    except Exception as e:
+        logging.error(f"Error fetching OHLC: {e}")
+    return []
+
+def analyze_market_structure(ohlc_data: List[Dict], current_price: float) -> Dict:
+    """Analyze real market structure: swing highs/lows, trend, liquidity zones"""
+    if len(ohlc_data) < 10:
+        return {"error": "Insufficient data"}
+    
+    highs = [c["high"] for c in ohlc_data]
+    lows = [c["low"] for c in ohlc_data]
+    closes = [c["close"] for c in ohlc_data]
+    
+    # Find swing highs and lows (local extremes)
+    swing_highs = []
+    swing_lows = []
+    
+    for i in range(2, len(ohlc_data) - 2):
+        # Swing high: higher than 2 candles before and after
+        if highs[i] > highs[i-1] and highs[i] > highs[i-2] and highs[i] > highs[i+1] and highs[i] > highs[i+2]:
+            swing_highs.append({"price": highs[i], "index": i})
+        # Swing low
+        if lows[i] < lows[i-1] and lows[i] < lows[i-2] and lows[i] < lows[i+1] and lows[i] < lows[i+2]:
+            swing_lows.append({"price": lows[i], "index": i})
+    
+    # Get recent swings (last 5)
+    recent_highs = sorted(swing_highs, key=lambda x: x["index"], reverse=True)[:5]
+    recent_lows = sorted(swing_lows, key=lambda x: x["index"], reverse=True)[:5]
+    
+    # Determine trend
+    if len(recent_highs) >= 2 and len(recent_lows) >= 2:
+        higher_highs = recent_highs[0]["price"] > recent_highs[1]["price"] if len(recent_highs) >= 2 else False
+        higher_lows = recent_lows[0]["price"] > recent_lows[1]["price"] if len(recent_lows) >= 2 else False
+        lower_highs = recent_highs[0]["price"] < recent_highs[1]["price"] if len(recent_highs) >= 2 else False
+        lower_lows = recent_lows[0]["price"] < recent_lows[1]["price"] if len(recent_lows) >= 2 else False
+        
+        if higher_highs and higher_lows:
+            trend = "BULLISH"
+        elif lower_highs and lower_lows:
+            trend = "BEARISH"
+        else:
+            trend = "RANGING"
+    else:
+        trend = "UNDEFINED"
+    
+    # Calculate ATR (Average True Range)
+    true_ranges = []
+    for i in range(1, len(ohlc_data)):
+        tr = max(
+            ohlc_data[i]["high"] - ohlc_data[i]["low"],
+            abs(ohlc_data[i]["high"] - ohlc_data[i-1]["close"]),
+            abs(ohlc_data[i]["low"] - ohlc_data[i-1]["close"])
+        )
+        true_ranges.append(tr)
+    atr = sum(true_ranges[-14:]) / min(14, len(true_ranges)) if true_ranges else current_price * 0.02
+    
+    # Identify liquidity zones (areas with multiple swing points)
+    liquidity_above = [h["price"] for h in recent_highs if h["price"] > current_price]
+    liquidity_below = [l["price"] for l in recent_lows if l["price"] < current_price]
+    
+    # Get nearest support and resistance
+    nearest_resistance = min(liquidity_above) if liquidity_above else current_price * 1.03
+    nearest_support = max(liquidity_below) if liquidity_below else current_price * 0.97
+    
+    # Recent high and low for context
+    recent_high = max(highs[-20:]) if len(highs) >= 20 else max(highs)
+    recent_low = min(lows[-20:]) if len(lows) >= 20 else min(lows)
     
     return {
-        "atr": round(current_atr, 4),
-        "atr_pct": round(base["atr_pct"] * random.uniform(0.8, 1.2), 2),
-        "session": base["session"],
-        "market_type": base["type"],
-        "volatility_level": "high" if base["atr_pct"] > 2 else "medium" if base["atr_pct"] > 1 else "low"
+        "trend": trend,
+        "atr": round(atr, 2),
+        "atr_pct": round((atr / current_price) * 100, 2),
+        "swing_highs": [h["price"] for h in recent_highs],
+        "swing_lows": [l["price"] for l in recent_lows],
+        "nearest_resistance": round(nearest_resistance, 2),
+        "nearest_support": round(nearest_support, 2),
+        "recent_high": round(recent_high, 2),
+        "recent_low": round(recent_low, 2),
+        "liquidity_above": sorted(liquidity_above)[:3] if liquidity_above else [],
+        "liquidity_below": sorted(liquidity_below, reverse=True)[:3] if liquidity_below else [],
+        "price_position": "PREMIUM" if current_price > (recent_high + recent_low) / 2 else "DISCOUNT"
+    }
+
+def calculate_signal_levels(
+    current_price: float,
+    structure: Dict,
+    direction: str,
+    strategy: str,
+    mode: str,
+    timeframe: str
+) -> Dict:
+    """Calculate Entry/SL/TP based on real market structure"""
+    
+    atr = structure.get("atr", current_price * 0.02)
+    
+    # Mode multipliers for SL/TP
+    mode_config = {
+        "scalping": {"sl_mult": 0.5, "tp_mult": 1.0, "min_rr": 1.5},
+        "intraday": {"sl_mult": 1.0, "tp_mult": 2.0, "min_rr": 2.0},
+        "swing": {"sl_mult": 1.5, "tp_mult": 3.5, "min_rr": 2.5}
+    }
+    
+    # Timeframe adjustments
+    tf_mult = {
+        "5min": 0.5, "15min": 0.75, "1h": 1.0, "4h": 1.5, "1d": 2.0
+    }
+    
+    config = mode_config.get(mode, mode_config["intraday"])
+    tf = tf_mult.get(timeframe, 1.0)
+    
+    # Entry is current market price
+    entry = current_price
+    
+    if direction == "BUY":
+        # SL below nearest swing low or support
+        swing_lows = structure.get("swing_lows", [])
+        if swing_lows:
+            # Find swing low below current price
+            valid_lows = [l for l in swing_lows if l < current_price]
+            sl_base = max(valid_lows) if valid_lows else current_price - atr * 1.5
+        else:
+            sl_base = structure.get("nearest_support", current_price - atr * 1.5)
+        
+        # Add buffer below swing low
+        sl = sl_base - (atr * 0.2)
+        
+        # TP at liquidity above or resistance
+        liquidity_above = structure.get("liquidity_above", [])
+        if liquidity_above:
+            tp1 = liquidity_above[0]
+        else:
+            tp1 = structure.get("nearest_resistance", current_price + atr * config["tp_mult"] * tf)
+        
+        # Ensure minimum RR
+        sl_distance = entry - sl
+        tp_distance = tp1 - entry
+        
+        if tp_distance / sl_distance < config["min_rr"]:
+            tp1 = entry + (sl_distance * config["min_rr"])
+        
+        tp2 = tp1 + (tp1 - entry) * 0.5
+        tp3 = structure.get("recent_high", tp1 + (tp1 - entry))
+        
+    else:  # SELL
+        # SL above nearest swing high or resistance
+        swing_highs = structure.get("swing_highs", [])
+        if swing_highs:
+            valid_highs = [h for h in swing_highs if h > current_price]
+            sl_base = min(valid_highs) if valid_highs else current_price + atr * 1.5
+        else:
+            sl_base = structure.get("nearest_resistance", current_price + atr * 1.5)
+        
+        # Add buffer above swing high
+        sl = sl_base + (atr * 0.2)
+        
+        # TP at liquidity below or support
+        liquidity_below = structure.get("liquidity_below", [])
+        if liquidity_below:
+            tp1 = liquidity_below[0]
+        else:
+            tp1 = structure.get("nearest_support", current_price - atr * config["tp_mult"] * tf)
+        
+        # Ensure minimum RR
+        sl_distance = sl - entry
+        tp_distance = entry - tp1
+        
+        if tp_distance / sl_distance < config["min_rr"]:
+            tp1 = entry - (sl_distance * config["min_rr"])
+        
+        tp2 = tp1 - (entry - tp1) * 0.5
+        tp3 = structure.get("recent_low", tp1 - (entry - tp1))
+    
+    decimals = 2 if current_price > 10 else 4
+    rr = round(abs(tp1 - entry) / abs(entry - sl), 2) if abs(entry - sl) > 0 else 2.0
+    
+    return {
+        "entry": round(entry, decimals),
+        "sl": round(sl, decimals),
+        "tp1": round(tp1, decimals),
+        "tp2": round(tp2, decimals),
+        "tp3": round(tp3, decimals),
+        "rr": rr,
+        "sl_distance": round(abs(entry - sl), decimals),
+        "tp_distance": round(abs(tp1 - entry), decimals)
     }
 
 # ==================== 5 ADVANCED STRATEGIES ====================
