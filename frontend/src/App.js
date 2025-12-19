@@ -295,20 +295,30 @@ function TradingPage() {
     if (!signal) return;
     setLoading(true);
     try {
-      // Get current market price for entry (not the signal price)
-      const priceRes = await axios.get(`${API}/price/${signal.symbol}`);
-      const currentPrice = priceRes.data.price;
+      // Get REAL current market price from Yahoo Finance
+      const priceRes = await axios.get(`${API}/real-price/${signal.symbol}`);
+      const marketPrice = priceRes.data.price;
+      
+      // Recalculate SL based on mode (scalping = tighter SL)
+      const slDistance = Math.abs(signal.optimal_entry - signal.sl);
+      const slMultiplier = mode === "scalping" ? 0.5 : mode === "intraday" ? 0.8 : 1.0;
+      const adjustedSL = signal.direction === "BUY" 
+        ? marketPrice - (slDistance * slMultiplier)
+        : marketPrice + (slDistance * slMultiplier);
       
       await axios.post(`${API}/trades`, {
         symbol: signal.symbol,
         direction: signal.direction,
-        entry_price: currentPrice,  // Entry at current market price
+        entry_price: marketPrice,  // ALWAYS current market price
         quantity: 1,
-        stop_loss: signal.sl,
+        stop_loss: adjustedSL,     // SL adjusted for mode
         take_profit: signal.tp,
         strategy: signal.strategy
       });
-      setMessage(`Trade exécuté au prix marché: ${currentPrice.toFixed(2)}`);
+      
+      const modeText = mode === "scalping" ? "(SL serré)" : "";
+      setMessage(`Trade exécuté @ ${marketPrice.toFixed(2)} ${modeText}`);
+      setSignal(null); // Clear signal after execution
       fetchData();
     } catch (e) {
       setMessage("Erreur: " + (e.response?.data?.detail || e.message));
