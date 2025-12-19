@@ -348,11 +348,11 @@ function TradingPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {/* TradingView Chart with Full Tools */}
+        {/* Real Chart with Yahoo Finance Data + Lines */}
         <div className="col-span-2 bg-slate-900 rounded-xl border border-slate-800 p-4">
           <TradingChartComponent 
             symbol={symbol} 
-            market={market}
+            trades={trades}
             signal={signal ? {
               direction: signal.direction,
               current_price: signal.current_price,
@@ -360,8 +360,7 @@ function TradingPage() {
               entry_type: signal.entry_type,
               sl: signal.sl,
               tp: signal.tp,
-              rr: signal.rr,
-              structure: signal.analysis
+              rr: signal.rr
             } : null}
           />
         </div>
