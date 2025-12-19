@@ -393,23 +393,56 @@ function TradingPage() {
             ✅ Exécuter Trade
           </button>
 
-          {/* Signal Preview */}
+          {/* Signal Preview with Structure Analysis */}
           {signal && (
             <div className="p-3 bg-slate-800 rounded-lg text-xs space-y-2">
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="font-semibold">{signal.symbol}</span>
-                <span className={`px-2 py-0.5 rounded font-bold ${signal.side === "BUY" ? "bg-emerald-600" : "bg-red-600"}`}>
-                  {signal.side}
+                <span className={`px-2 py-0.5 rounded font-bold ${signal.direction === "BUY" ? "bg-emerald-600" : "bg-red-600"}`}>
+                  {signal.direction}
                 </span>
               </div>
-              <div className="text-slate-400">{signal.timeframe} • {signal.mode} • {signal.strategy.toUpperCase()}</div>
-              <div className="grid grid-cols-2 gap-1">
-                <div>Entry: <span className="text-white">{fmt(signal.entry, 4)}</span></div>
-                <div>SL: <span className="text-red-400">{fmt(signal.sl, 4)}</span></div>
-                <div>TP: <span className="text-emerald-400">{fmt(signal.tp, 4)}</span></div>
-                <div>RR: <span className="text-blue-400">{signal.rr}</span></div>
+              <div className="text-slate-400">{signal.timeframe} • {signal.mode}</div>
+              
+              {/* Levels */}
+              <div className="grid grid-cols-2 gap-1 py-2 border-y border-slate-700">
+                <div>Entry: <span className="text-white font-mono">{fmt(signal.entry, 2)}</span></div>
+                <div>SL: <span className="text-red-400 font-mono">{fmt(signal.sl, 2)}</span></div>
+                <div>TP1: <span className="text-emerald-400 font-mono">{fmt(signal.tp, 2)}</span></div>
+                <div>RR: <span className="text-yellow-400 font-bold">{signal.rr}:1</span></div>
               </div>
-              <div className="text-center text-amber-400">Confiance: {signal.confidence}%</div>
+              
+              {/* Structure Info */}
+              {signal.analysis && (
+                <div className="space-y-1 text-[10px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Trend:</span>
+                    <span className={signal.analysis.trend === "BULLISH" ? "text-emerald-400" : signal.analysis.trend === "BEARISH" ? "text-red-400" : "text-yellow-400"}>
+                      {signal.analysis.trend}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Position:</span>
+                    <span className="text-white">{signal.analysis.price_position}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Support:</span>
+                    <span className="text-emerald-400 font-mono">{signal.analysis.nearest_support}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Résistance:</span>
+                    <span className="text-red-400 font-mono">{signal.analysis.nearest_resistance}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">ATR:</span>
+                    <span className="text-white font-mono">{signal.analysis.atr?.toFixed(2)} ({signal.analysis.atr_pct}%)</span>
+                  </div>
+                </div>
+              )}
+              
+              <div className="text-center pt-2 border-t border-slate-700">
+                <span className="text-amber-400 font-bold">Confiance: {signal.confidence}%</span>
+              </div>
             </div>
           )}
         </div>
