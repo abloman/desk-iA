@@ -818,7 +818,7 @@ async def ai_analyze(request: AIAnalysisRequest, user: dict = Depends(get_curren
     price = await get_current_price(request.symbol)
     
     # Fetch REAL OHLC data for structure analysis
-    ohlc_data = await fetch_ohlc_data(request.symbol, days=7)
+    ohlc_data = await fetch_ohlc_data(request.symbol, period="7d", interval="1h")
     
     # Analyze REAL market structure
     if ohlc_data and len(ohlc_data) >= 10:
