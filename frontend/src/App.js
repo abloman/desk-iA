@@ -351,6 +351,9 @@ function TradingPage() {
             signal={signal ? {
               direction: signal.direction,
               entry: signal.entry,
+              optimal_entry: signal.entry, // Use entry as optimal for now
+              current_price: signal.entry, // Will be updated by backend
+              entry_type: "MARKET", // Default to market order
               sl: signal.sl,
               tp: signal.tp,
               rr: signal.rr,
