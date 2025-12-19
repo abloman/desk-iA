@@ -290,16 +290,20 @@ function TradingPage() {
     if (!signal) return;
     setLoading(true);
     try {
+      // Get current market price for entry (not the signal price)
+      const priceRes = await axios.get(`${API}/price/${signal.symbol}`);
+      const currentPrice = priceRes.data.price;
+      
       await axios.post(`${API}/trades`, {
         symbol: signal.symbol,
-        direction: signal.side,
-        entry_price: signal.entry,
+        direction: signal.direction,
+        entry_price: currentPrice,  // Entry at current market price
         quantity: 1,
         stop_loss: signal.sl,
         take_profit: signal.tp,
         strategy: signal.strategy
       });
-      setMessage("Trade exécuté !");
+      setMessage(`Trade exécuté au prix marché: ${currentPrice.toFixed(2)}`);
       fetchData();
     } catch (e) {
       setMessage("Erreur: " + (e.response?.data?.detail || e.message));
