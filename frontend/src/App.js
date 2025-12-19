@@ -856,42 +856,161 @@ function Select({ label, value, onChange, options }) {
   );
 }
 
-// ==================== TRADINGVIEW CHART COMPONENT ====================
-function TradingChartComponent({ symbol, signal, market }) {
-  // Convert symbol to TradingView format - FREE symbols for all markets
-  const getTvSymbol = () => {
-    const tvMap = {
-      // Crypto
-      "BTC/USD": "BINANCE:BTCUSDT", "ETH/USD": "BINANCE:ETHUSDT", "SOL/USD": "BINANCE:SOLUSDT",
-      "XRP/USD": "BINANCE:XRPUSDT", "ADA/USD": "BINANCE:ADAUSDT",
-      // Forex (FX_IDC is free)
-      "EUR/USD": "FX_IDC:EURUSD", "GBP/USD": "FX_IDC:GBPUSD", "USD/JPY": "FX_IDC:USDJPY",
-      "AUD/USD": "FX_IDC:AUDUSD", "USD/CHF": "FX_IDC:USDCHF",
-      // Indices (ETF proxies - free)
-      "US30": "AMEX:DIA", "US100": "NASDAQ:QQQ", "US500": "AMEX:SPY",
-      "GER40": "XETR:DAX", "UK100": "LSE:ISF",
-      // Metals (ETF proxies - free)
-      "XAU/USD": "AMEX:GLD", "XAG/USD": "AMEX:SLV", "XPT/USD": "AMEX:PPLT", "XPD/USD": "AMEX:PALL",
-      // Futures (ETF proxies - free)
-      "ES": "AMEX:SPY", "NQ": "NASDAQ:QQQ", "CL": "AMEX:USO", "GC": "AMEX:GLD", "SI": "AMEX:SLV"
-    };
-    return tvMap[symbol] || "BINANCE:BTCUSDT";
-  };
+// ==================== LIGHTWEIGHT CHART WITH YAHOO FINANCE ====================
+function TradingChartComponent({ symbol, signal, trades = [], onPriceUpdate }) {
+  const chartContainerRef = useRef(null);
+  const chartRef = useRef(null);
+  const seriesRef = useRef(null);
+  const linesRef = useRef([]);
+  const [currentPrice, setCurrentPrice] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const tvSymbol = getTvSymbol();
+  // Fetch real OHLC data from Yahoo Finance via backend
+  const fetchChartData = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/chart-data/${symbol}?period=5d&interval=15m`);
+      return res.data;
+    } catch (e) {
+      console.error("Chart data error:", e);
+      return null;
+    }
+  }, [symbol]);
+
+  // Initialize chart
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: { background: { type: ColorType.Solid, color: '#0f172a' }, textColor: '#94a3b8' },
+      grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+      width: chartContainerRef.current.clientWidth,
+      height: 420,
+      crosshair: { mode: 1 },
+      rightPriceScale: { borderColor: '#334155', scaleMargins: { top: 0.1, bottom: 0.2 } },
+      timeScale: { borderColor: '#334155', timeVisible: true, secondsVisible: false },
+    });
+    chartRef.current = chart;
+
+    const series = chart.addSeries(CandlestickSeries, {
+      upColor: '#10b981', downColor: '#ef4444',
+      borderUpColor: '#10b981', borderDownColor: '#ef4444',
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
+    });
+    seriesRef.current = series;
+
+    // Load data
+    const loadData = async () => {
+      setLoading(true);
+      const data = await fetchChartData();
+      if (data && data.data && data.data.length > 0) {
+        const candles = data.data.map(d => ({
+          time: Math.floor(d.time / 1000),
+          open: d.open, high: d.high, low: d.low, close: d.close
+        }));
+        series.setData(candles);
+        chart.timeScale().fitContent();
+        setCurrentPrice(data.current_price);
+        if (onPriceUpdate) onPriceUpdate(data.current_price);
+      }
+      setLoading(false);
+    };
+    loadData();
+
+    // Resize handler
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Refresh data every 30 seconds
+    const interval = setInterval(loadData, 30000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+    };
+  }, [symbol, fetchChartData, onPriceUpdate]);
+
+  // Draw horizontal lines for signal and trades
+  useEffect(() => {
+    if (!seriesRef.current) return;
+
+    // Remove old lines
+    linesRef.current.forEach(line => {
+      try { seriesRef.current.removePriceLine(line); } catch(e) {}
+    });
+    linesRef.current = [];
+
+    // Draw signal lines
+    if (signal) {
+      if (signal.optimal_entry) {
+        linesRef.current.push(seriesRef.current.createPriceLine({
+          price: signal.optimal_entry, color: '#3b82f6', lineWidth: 2,
+          lineStyle: 0, axisLabelVisible: true, title: 'ENTRY',
+        }));
+      }
+      if (signal.sl) {
+        linesRef.current.push(seriesRef.current.createPriceLine({
+          price: signal.sl, color: '#ef4444', lineWidth: 2,
+          lineStyle: 2, axisLabelVisible: true, title: 'SL',
+        }));
+      }
+      if (signal.tp) {
+        linesRef.current.push(seriesRef.current.createPriceLine({
+          price: signal.tp, color: '#10b981', lineWidth: 2,
+          lineStyle: 2, axisLabelVisible: true, title: 'TP',
+        }));
+      }
+    }
+
+    // Draw lines for open trades
+    trades.filter(t => t.status === 'open' && t.symbol === symbol).forEach(trade => {
+      linesRef.current.push(seriesRef.current.createPriceLine({
+        price: trade.entry_price, color: trade.direction === 'BUY' ? '#22c55e' : '#f97316',
+        lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: `${trade.direction}`,
+      }));
+      if (trade.stop_loss) {
+        linesRef.current.push(seriesRef.current.createPriceLine({
+          price: trade.stop_loss, color: '#ef4444', lineWidth: 1, lineStyle: 2, title: 'SL',
+        }));
+      }
+      if (trade.take_profit) {
+        linesRef.current.push(seriesRef.current.createPriceLine({
+          price: trade.take_profit, color: '#10b981', lineWidth: 1, lineStyle: 2, title: 'TP',
+        }));
+      }
+    });
+  }, [signal, trades, symbol]);
+
+  const fmt = (n) => n ? (n < 10 ? n.toFixed(4) : n.toFixed(2)) : '-';
 
   return (
     <div className="relative w-full">
-      {/* TradingView Advanced Chart with ALL tools */}
-      <iframe
-        key={tvSymbol}
-        src={`https://s.tradingview.com/widgetembed/?symbol=${tvSymbol}&interval=15&theme=dark&style=1&locale=fr&toolbar_bg=%23f1f3f6&enable_publishing=false&hide_top_toolbar=false&hide_side_toolbar=false&allow_symbol_change=true&save_image=true&studies=%5B%5D&show_popup_button=true&popup_width=1000&popup_height=650`}
-        className="w-full h-[500px] rounded-lg border border-slate-700"
-        title="TradingView Chart"
-        allowFullScreen
-      />
-      
-      {/* Signal Levels Panel - Shows OPTIMAL ENTRY */}
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2 px-1">
+        <div className="flex items-center gap-3">
+          <span className="text-lg font-bold text-white">{symbol}</span>
+          <span className="text-xs text-slate-500">Yahoo Finance</span>
+          {currentPrice && <span className="text-xl font-mono text-sky-400">{fmt(currentPrice)}</span>}
+        </div>
+        {loading && <span className="text-xs text-slate-500">Chargement...</span>}
+      </div>
+
+      {/* Chart */}
+      <div ref={chartContainerRef} className="w-full rounded-lg border border-slate-700" />
+
+      {/* Legend */}
+      <div className="flex items-center justify-center gap-6 mt-2 text-[10px] text-slate-400">
+        <span>🟢 Bullish</span> <span>🔴 Bearish</span>
+        <span className="text-blue-400">━ Entry</span>
+        <span className="text-red-400">┈ SL</span>
+        <span className="text-emerald-400">┈ TP</span>
+      </div>
+
+      {/* Signal Panel */}
       {signal && (
         <div className="mt-3 p-3 bg-slate-800/80 rounded-lg border border-slate-700">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -899,72 +1018,18 @@ function TradingChartComponent({ symbol, signal, market }) {
               <span className={`px-3 py-1 rounded font-bold text-sm ${signal.direction === "BUY" ? "bg-emerald-600" : "bg-red-600"}`}>
                 {signal.direction}
               </span>
-              <span className="text-slate-400 text-sm">{symbol}</span>
               <span className={`px-2 py-0.5 rounded text-xs ${signal.entry_type === "LIMIT" ? "bg-amber-600" : "bg-blue-600"}`}>
-                {signal.entry_type === "LIMIT" ? "📍 Ordre Limite" : "⚡ Marché"}
+                {signal.entry_type === "LIMIT" ? "📍 Limite" : "⚡ Marché"}
               </span>
             </div>
             <div className="flex items-center gap-4 text-sm">
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-slate-500">Prix Actuel</span>
-                <span className="font-mono text-white">{signal.current_price?.toFixed(2)}</span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-blue-400">Entrée Optimale</span>
-                <span className="font-mono text-blue-400 font-bold">{signal.optimal_entry?.toFixed(2)}</span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-red-400">Stop Loss</span>
-                <span className="font-mono text-red-400 font-bold">{signal.sl?.toFixed(2)}</span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-emerald-400">Take Profit</span>
-                <span className="font-mono text-emerald-400 font-bold">{signal.tp?.toFixed(2)}</span>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] text-yellow-400">R:R</span>
-                <span className="font-mono text-yellow-400 font-bold">{signal.rr?.toFixed(1)}:1</span>
-              </div>
+              <div><span className="text-slate-500 text-xs">Actuel:</span> <span className="font-mono text-white">{fmt(signal.current_price)}</span></div>
+              <div><span className="text-blue-400 text-xs">Optimal:</span> <span className="font-mono text-blue-400 font-bold">{fmt(signal.optimal_entry)}</span></div>
+              <div><span className="text-red-400 text-xs">SL:</span> <span className="font-mono text-red-400">{fmt(signal.sl)}</span></div>
+              <div><span className="text-emerald-400 text-xs">TP:</span> <span className="font-mono text-emerald-400">{fmt(signal.tp)}</span></div>
+              <div><span className="text-yellow-400 text-xs">RR:</span> <span className="font-mono text-yellow-400 font-bold">{signal.rr?.toFixed(1)}:1</span></div>
             </div>
           </div>
-          
-          {/* Structure Analysis */}
-          {signal.structure && (
-            <div className="mt-2 pt-2 border-t border-slate-700 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Trend:</span>
-                <span className={signal.structure.trend === "BULLISH" ? "text-emerald-400" : signal.structure.trend === "BEARISH" ? "text-red-400" : "text-yellow-400"}>
-                  {signal.structure.trend}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Position:</span>
-                <span className={signal.structure.price_position === "DISCOUNT" ? "text-emerald-400" : signal.structure.price_position === "PREMIUM" ? "text-red-400" : "text-white"}>
-                  {signal.structure.price_position}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Support:</span>
-                <span className="text-emerald-400 font-mono">{signal.structure.nearest_support?.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Résistance:</span>
-                <span className="text-red-400 font-mono">{signal.structure.nearest_resistance?.toFixed(2)}</span>
-              </div>
-              {signal.structure.last_bos && (
-                <div className="flex justify-between col-span-2">
-                  <span className="text-slate-500">Dernier BOS:</span>
-                  <span className="text-purple-400 font-mono">{signal.structure.last_bos.level?.toFixed(2)} ✓</span>
-                </div>
-              )}
-              {signal.structure.order_blocks?.length > 0 && (
-                <div className="flex justify-between col-span-2">
-                  <span className="text-slate-500">Order Block:</span>
-                  <span className="text-cyan-400 font-mono">{signal.structure.order_blocks[0].entry_zone?.toFixed(2)}</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>
