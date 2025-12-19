@@ -400,9 +400,56 @@ def _generate_simulated_ohlc(symbol: str, count: int = 100) -> List[Dict]:
     return data
 
 async def fetch_ohlc_data(symbol: str, period: str = "7d", interval: str = "1h") -> List[Dict]:
-    """Async wrapper for Yahoo Finance data"""
+    """Async wrapper for Yahoo Finance data with CME 10-min delay for futures"""
     loop = asyncio.get_event_loop()
+    
+    # Check if this is a CME future requiring delay
+    if symbol in CME_FUTURES:
+        return await fetch_cme_data_with_delay(symbol, period, interval)
+    
     return await loop.run_in_executor(executor, _fetch_yf_data, symbol, period, interval)
+
+async def fetch_cme_data_with_delay(symbol: str, period: str = "7d", interval: str = "1h") -> List[Dict]:
+    """Fetch CME futures data with 10-minute delay"""
+    global CME_CACHE
+    
+    now = datetime.now(timezone.utc)
+    cache_key = f"{symbol}_{period}_{interval}"
+    
+    # Check cache
+    if cache_key in CME_CACHE:
+        cached = CME_CACHE[cache_key]
+        cache_age = (now - cached["timestamp"]).total_seconds() / 60
+        
+        # If cache is fresh (less than 10 min old), return it with delay applied
+        if cache_age < CME_DELAY_MINUTES:
+            return cached["data"]
+    
+    # Fetch fresh data
+    loop = asyncio.get_event_loop()
+    raw_data = await loop.run_in_executor(executor, _fetch_yf_data, symbol, period, interval)
+    
+    if raw_data:
+        # Apply 10-minute delay: shift all timestamps back by 10 minutes
+        delay_ms = CME_DELAY_MINUTES * 60 * 1000
+        delayed_data = []
+        
+        for candle in raw_data:
+            delayed_candle = candle.copy()
+            # Only include data that is at least 10 min old
+            if candle["time"] <= (int(now.timestamp()) - CME_DELAY_MINUTES * 60) * 1000:
+                delayed_data.append(delayed_candle)
+        
+        # Cache the delayed data
+        CME_CACHE[cache_key] = {
+            "data": delayed_data if delayed_data else raw_data,
+            "timestamp": now
+        }
+        
+        logging.info(f"CME {symbol}: Serving {len(delayed_data)} candles with 10-min delay")
+        return delayed_data if delayed_data else raw_data
+    
+    return raw_data
 
 def _get_yf_price(symbol: str) -> float:
     """Get current price from Yahoo Finance (blocking)"""
