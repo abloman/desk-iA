@@ -939,16 +939,20 @@ Donne une recommandation {direction} concise."""
         logging.error(f"Claude error: {e}")
         reasoning += f"Signal {direction} basé sur {strategy_analysis.get('name', request.strategy)}"
     
-    # Build response
+    # Build response with OPTIMAL entry and CURRENT price
     analysis = {
         "signal": direction,
         "confidence": base_confidence,
-        "entry_price": levels["entry"],
+        "current_price": levels["current_price"],
+        "optimal_entry": levels["optimal_entry"],
+        "entry_type": levels["entry_type"],  # LIMIT or MARKET
         "stop_loss": levels["sl"],
         "take_profit_1": levels["tp1"],
         "take_profit_2": levels["tp2"],
         "take_profit_3": levels["tp3"],
         "rr_ratio": levels["rr"],
+        "sl_distance": levels["sl_distance"],
+        "tp_distance": levels["tp_distance"],
         "analysis": strategy_analysis,
         "reasoning": reasoning
     }
@@ -962,7 +966,9 @@ Donne une recommandation {direction} concise."""
         "mode": request.mode,
         "strategy": request.strategy,
         "direction": direction,
-        "entry_price": levels["entry"],
+        "current_price": levels["current_price"],
+        "optimal_entry": levels["optimal_entry"],
+        "entry_type": levels["entry_type"],
         "stop_loss": levels["sl"],
         "take_profit_1": levels["tp1"],
         "confidence": base_confidence,
