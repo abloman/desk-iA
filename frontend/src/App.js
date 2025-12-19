@@ -858,22 +858,22 @@ function Select({ label, value, onChange, options }) {
 
 // ==================== TRADINGVIEW CHART COMPONENT ====================
 function TradingChartComponent({ symbol, signal, market }) {
-  // Convert symbol to TradingView format - supports ALL markets
+  // Convert symbol to TradingView format - FREE symbols for all markets
   const getTvSymbol = () => {
     const tvMap = {
       // Crypto
       "BTC/USD": "BINANCE:BTCUSDT", "ETH/USD": "BINANCE:ETHUSDT", "SOL/USD": "BINANCE:SOLUSDT",
       "XRP/USD": "BINANCE:XRPUSDT", "ADA/USD": "BINANCE:ADAUSDT",
-      // Forex
-      "EUR/USD": "FX:EURUSD", "GBP/USD": "FX:GBPUSD", "USD/JPY": "FX:USDJPY",
-      "AUD/USD": "FX:AUDUSD", "USD/CHF": "FX:USDCHF",
-      // Indices
-      "US30": "TVC:DJI", "US100": "NASDAQ:NDX", "US500": "SP:SPX",
-      "GER40": "XETR:DAX", "UK100": "TVC:UKX",
-      // Metals (use futures for real prices)
-      "XAU/USD": "COMEX:GC1!", "XAG/USD": "COMEX:SI1!", "XPT/USD": "NYMEX:PL1!", "XPD/USD": "NYMEX:PA1!",
-      // Futures
-      "ES": "CME_MINI:ES1!", "NQ": "CME_MINI:NQ1!", "CL": "NYMEX:CL1!", "GC": "COMEX:GC1!", "SI": "COMEX:SI1!"
+      // Forex (FX_IDC is free)
+      "EUR/USD": "FX_IDC:EURUSD", "GBP/USD": "FX_IDC:GBPUSD", "USD/JPY": "FX_IDC:USDJPY",
+      "AUD/USD": "FX_IDC:AUDUSD", "USD/CHF": "FX_IDC:USDCHF",
+      // Indices (ETF proxies - free)
+      "US30": "AMEX:DIA", "US100": "NASDAQ:QQQ", "US500": "AMEX:SPY",
+      "GER40": "XETR:DAX", "UK100": "LSE:ISF",
+      // Metals (ETF proxies - free)
+      "XAU/USD": "AMEX:GLD", "XAG/USD": "AMEX:SLV", "XPT/USD": "AMEX:PPLT", "XPD/USD": "AMEX:PALL",
+      // Futures (ETF proxies - free)
+      "ES": "AMEX:SPY", "NQ": "NASDAQ:QQQ", "CL": "AMEX:USO", "GC": "AMEX:GLD", "SI": "AMEX:SLV"
     };
     return tvMap[symbol] || "BINANCE:BTCUSDT";
   };
