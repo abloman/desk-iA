@@ -277,31 +277,92 @@ async def get_price(symbol: str, user: dict = Depends(get_current_user)):
     price = await get_current_price(symbol)
     return {"symbol": symbol, "price": price, "timestamp": datetime.now(timezone.utc).isoformat()}
 
-# ==================== REAL MARKET DATA & STRUCTURE ANALYSIS ====================
+# ==================== REAL MARKET DATA (Yahoo Finance) ====================
 
-CRYPTO_COINGECKO_IDS = {
-    "BTC/USD": "bitcoin", "ETH/USD": "ethereum", "SOL/USD": "solana",
-    "XRP/USD": "ripple", "ADA/USD": "cardano"
+# Symbol mapping: Internal -> Yahoo Finance
+YAHOO_SYMBOLS = {
+    # Crypto
+    "BTC/USD": "BTC-USD", "ETH/USD": "ETH-USD", "SOL/USD": "SOL-USD",
+    "XRP/USD": "XRP-USD", "ADA/USD": "ADA-USD",
+    # Forex
+    "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X",
+    "AUD/USD": "AUDUSD=X", "USD/CHF": "USDCHF=X",
+    # Indices
+    "US30": "^DJI", "US100": "^IXIC", "US500": "^GSPC",
+    "GER40": "^GDAXI", "UK100": "^FTSE",
+    # Metals (Futures)
+    "XAU/USD": "GC=F", "XAG/USD": "SI=F", "XPT/USD": "PL=F", "XPD/USD": "PA=F",
+    # Futures
+    "ES": "ES=F", "NQ": "NQ=F", "CL": "CL=F", "GC": "GC=F", "SI": "SI=F"
 }
 
-async def fetch_ohlc_data(symbol: str, days: int = 1) -> List[Dict]:
-    """Fetch real OHLC data from CoinGecko"""
-    coin_id = CRYPTO_COINGECKO_IDS.get(symbol)
-    if not coin_id:
-        return []
-    
+# TradingView symbol mapping for chart display
+TRADINGVIEW_SYMBOLS = {
+    # Crypto
+    "BTC/USD": "BINANCE:BTCUSDT", "ETH/USD": "BINANCE:ETHUSDT", "SOL/USD": "BINANCE:SOLUSDT",
+    "XRP/USD": "BINANCE:XRPUSDT", "ADA/USD": "BINANCE:ADAUSDT",
+    # Forex
+    "EUR/USD": "FX:EURUSD", "GBP/USD": "FX:GBPUSD", "USD/JPY": "FX:USDJPY",
+    "AUD/USD": "FX:AUDUSD", "USD/CHF": "FX:USDCHF",
+    # Indices
+    "US30": "TVC:DJI", "US100": "NASDAQ:NDX", "US500": "SP:SPX",
+    "GER40": "XETR:DAX", "UK100": "TVC:UKX",
+    # Metals
+    "XAU/USD": "COMEX:GC1!", "XAG/USD": "COMEX:SI1!", "XPT/USD": "NYMEX:PL1!", "XPD/USD": "NYMEX:PA1!",
+    # Futures
+    "ES": "CME_MINI:ES1!", "NQ": "CME_MINI:NQ1!", "CL": "NYMEX:CL1!", "GC": "COMEX:GC1!", "SI": "COMEX:SI1!"
+}
+
+# Thread executor for yfinance (blocking calls)
+executor = ThreadPoolExecutor(max_workers=4)
+
+def _fetch_yf_data(symbol: str, period: str = "7d", interval: str = "1h") -> List[Dict]:
+    """Fetch OHLC data from Yahoo Finance (blocking)"""
+    yf_symbol = YAHOO_SYMBOLS.get(symbol, symbol)
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc",
-                params={"vs_currency": "usd", "days": days}
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                return [{"time": d[0], "open": d[1], "high": d[2], "low": d[3], "close": d[4]} for d in data]
+        ticker = yf.Ticker(yf_symbol)
+        hist = ticker.history(period=period, interval=interval)
+        if not hist.empty:
+            data = []
+            for idx, row in hist.iterrows():
+                data.append({
+                    "time": int(idx.timestamp() * 1000),
+                    "open": float(row["Open"]),
+                    "high": float(row["High"]),
+                    "low": float(row["Low"]),
+                    "close": float(row["Close"]),
+                    "volume": float(row.get("Volume", 0))
+                })
+            return data
     except Exception as e:
-        logging.error(f"Error fetching OHLC: {e}")
+        logging.error(f"Yahoo Finance error for {symbol}: {e}")
     return []
+
+async def fetch_ohlc_data(symbol: str, period: str = "7d", interval: str = "1h") -> List[Dict]:
+    """Async wrapper for Yahoo Finance data"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, _fetch_yf_data, symbol, period, interval)
+
+def _get_yf_price(symbol: str) -> float:
+    """Get current price from Yahoo Finance (blocking)"""
+    yf_symbol = YAHOO_SYMBOLS.get(symbol, symbol)
+    try:
+        ticker = yf.Ticker(yf_symbol)
+        hist = ticker.history(period="1d", interval="1m")
+        if not hist.empty:
+            return float(hist["Close"].iloc[-1])
+    except Exception as e:
+        logging.error(f"YF price error: {e}")
+    return 0
+
+async def get_real_price(symbol: str) -> float:
+    """Get real-time price from Yahoo Finance"""
+    loop = asyncio.get_event_loop()
+    price = await loop.run_in_executor(executor, _get_yf_price, symbol)
+    if price > 0:
+        return price
+    # Fallback to simulated price
+    return await get_current_price(symbol)
 
 def analyze_market_structure(ohlc_data: List[Dict], current_price: float) -> Dict:
     """Analyze real market structure: swing highs/lows, trend, liquidity zones"""
