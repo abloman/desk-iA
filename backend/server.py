@@ -656,10 +656,11 @@ def calculate_signal_levels(
     price_position = structure.get("price_position", "NEUTRAL")
     
     # Mode config: RR requirements vary by mode
+    # SCALPING: Tighter SL (smaller sl_mult = closer stop), lower RR requirement
     mode_config = {
-        "scalping": {"min_rr": 1.5, "sl_buffer": 0.3},
-        "intraday": {"min_rr": 2.0, "sl_buffer": 0.2},
-        "swing": {"min_rr": 2.5, "sl_buffer": 0.15}
+        "scalping": {"min_rr": 1.5, "sl_buffer": 0.15, "sl_mult": 0.5},  # 50% tighter SL
+        "intraday": {"min_rr": 2.0, "sl_buffer": 0.2, "sl_mult": 1.0},   # Normal SL
+        "swing": {"min_rr": 2.5, "sl_buffer": 0.15, "sl_mult": 1.5}       # Wider SL for swing
     }
     
     # Timeframe adjustments for SL buffer
