@@ -647,15 +647,35 @@ def generate_advanced_analysis(strategy: str, price: float, symbol: str, volatil
 
 @api_router.post("/ai/analyze")
 async def ai_analyze(request: AIAnalysisRequest, user: dict = Depends(get_current_user)):
-    """Generate AI trading signal with advanced strategies and volatility analysis"""
+    """Generate AI trading signal with REAL market structure analysis"""
     
-    # Get current price
+    # Get current REAL price
     price = await get_current_price(request.symbol)
     
-    # Calculate volatility for this symbol
-    volatility = calculate_volatility(request.symbol, price)
+    # Fetch REAL OHLC data for structure analysis
+    ohlc_data = await fetch_ohlc_data(request.symbol, days=7)
     
-    # Map old strategy names to new advanced ones
+    # Analyze REAL market structure
+    if ohlc_data and len(ohlc_data) >= 10:
+        structure = analyze_market_structure(ohlc_data, price)
+    else:
+        # Fallback for non-crypto or API failure
+        structure = {
+            "trend": "UNDEFINED",
+            "atr": price * 0.02,
+            "atr_pct": 2.0,
+            "swing_highs": [price * 1.02, price * 1.04],
+            "swing_lows": [price * 0.98, price * 0.96],
+            "nearest_resistance": price * 1.03,
+            "nearest_support": price * 0.97,
+            "recent_high": price * 1.05,
+            "recent_low": price * 0.95,
+            "liquidity_above": [],
+            "liquidity_below": [],
+            "price_position": "NEUTRAL"
+        }
+    
+    # Map strategy names
     strategy_mapping = {
         "smc": "smc_ict_advanced",
         "ict": "smc_ict_advanced",
@@ -667,17 +687,52 @@ async def ai_analyze(request: AIAnalysisRequest, user: dict = Depends(get_curren
     }
     mapped_strategy = strategy_mapping.get(request.strategy.lower(), "smc_ict_advanced")
     
-    # Generate advanced strategy analysis with volatility
-    strategy_analysis = generate_advanced_analysis(mapped_strategy, price, request.symbol, volatility)
+    # Determine direction based on REAL structure
+    trend = structure.get("trend", "RANGING")
+    price_position = structure.get("price_position", "NEUTRAL")
     
-    # Determine direction based on strategy bias
-    direction = "BUY" if strategy_analysis.get("bias") == "Bullish" else "SELL"
+    # Trading logic based on structure
+    if trend == "BULLISH":
+        direction = "BUY" if price_position == "DISCOUNT" else "SELL" if price_position == "PREMIUM" else "BUY"
+    elif trend == "BEARISH":
+        direction = "SELL" if price_position == "PREMIUM" else "BUY" if price_position == "DISCOUNT" else "SELL"
+    else:
+        # Ranging - trade from extremes
+        direction = "BUY" if price_position == "DISCOUNT" else "SELL"
     
-    # Calculate levels using volatility-aware calculation
-    levels = calculate_levels_advanced(price, direction, mapped_strategy, request.symbol, volatility)
+    # Calculate levels based on REAL structure
+    levels = calculate_signal_levels(price, structure, direction, mapped_strategy, request.mode, request.timeframe)
     
-    # Calculate confidence based on confluence score
-    base_confidence = strategy_analysis.get("confluence_score", 60)
+    # Build strategy analysis with real data
+    strategy_analysis = {
+        "name": ADVANCED_STRATEGIES.get(mapped_strategy, {}).get("name", mapped_strategy),
+        "trend": trend,
+        "price_position": price_position,
+        "atr": structure.get("atr"),
+        "atr_pct": structure.get("atr_pct"),
+        "nearest_resistance": structure.get("nearest_resistance"),
+        "nearest_support": structure.get("nearest_support"),
+        "recent_high": structure.get("recent_high"),
+        "recent_low": structure.get("recent_low"),
+        "swing_highs": structure.get("swing_highs", [])[:3],
+        "swing_lows": structure.get("swing_lows", [])[:3],
+        "liquidity_above": structure.get("liquidity_above", []),
+        "liquidity_below": structure.get("liquidity_below", []),
+        "bias": "Bullish" if direction == "BUY" else "Bearish"
+    }
+    
+    # Calculate confidence based on structure alignment
+    base_confidence = 50
+    if trend != "UNDEFINED" and trend != "RANGING":
+        base_confidence += 15
+    if (trend == "BULLISH" and direction == "BUY") or (trend == "BEARISH" and direction == "SELL"):
+        base_confidence += 15
+    if price_position == "DISCOUNT" and direction == "BUY":
+        base_confidence += 10
+    elif price_position == "PREMIUM" and direction == "SELL":
+        base_confidence += 10
+    if levels.get("rr", 0) >= 2:
+        base_confidence += 10
     
     # Try Claude for enhanced analysis
     reasoning = f"Analyse {strategy_analysis['name']}: "
