@@ -3,26 +3,17 @@
 #====================================================================================================
 
 user_problem_statement: |
-  Create the best trading assistant "Alphamind" with:
-  - All financial markets (Crypto, Forex, Indices, Metals, Futures)
-  - Real-time PNL display with fluid updates (every 2 seconds)
-  - Entry/SL/TP horizontal lines on chart like TopStep X
-  - 5 Advanced strategies: SMC/ICT Avancée, Market Structure, OrderBlock, MA Avancé, OPR
-  - Coherent SL/TP based on volatility and market conditions
-  - Only manual close button for trades (no SL/TP buttons)
-  - Performance page with equity curve, strategy rankings, clear history button
-  - MT5 connection ready for Windows deployment
+  Alphamind Trading Assistant v4 - Plateforme professionnelle avec:
+  - Interface TradingView complète (tous les outils de dessin)
+  - Signaux basés sur VRAIES données de marché (CoinGecko OHLC)
+  - Analyse de structure réelle (swing highs/lows, support/resistance)
+  - Entry au prix marché immédiat
+  - SL derrière les vrais swing points
+  - TP vers les vraies zones de liquidité
+  - RR cohérent selon mode et timeframe
 
 backend:
-  - task: "User Authentication"
-    implemented: true
-    working: true
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-
-  - task: "5 Advanced Strategies with Volatility-based SL/TP"
+  - task: "Fetch Real OHLC Data from CoinGecko"
     implemented: true
     working: true
     file: "/app/backend/server.py"
@@ -32,9 +23,9 @@ backend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Implemented SMC/ICT, Market Structure, OrderBlock, MA Advanced, OPR strategies with ATR-based SL/TP calculation"
+        comment: "Fetches 7 days of real candle data from CoinGecko API"
 
-  - task: "Futures Market Support"
+  - task: "Real Market Structure Analysis"
     implemented: true
     working: true
     file: "/app/backend/server.py"
@@ -44,46 +35,30 @@ backend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Added ES, NQ, CL, GC, SI futures symbols"
+        comment: "Analyzes real swing highs/lows, calculates ATR, identifies trend, support/resistance"
 
-  - task: "Equity Curve Endpoint"
+  - task: "Signal Levels Based on Real Structure"
     implemented: true
     working: true
     file: "/app/backend/server.py"
     stuck_count: 0
-    priority: "medium"
+    priority: "high"
     needs_retesting: true
-
-  - task: "Strategy Stats Endpoint"
-    implemented: true
-    working: true
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "medium"
-    needs_retesting: true
-
-  - task: "Clear History Endpoint"
-    implemented: true
-    working: true
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "medium"
-    needs_retesting: true
-
-  - task: "MT5 Integration (Windows Ready)"
-    implemented: true
-    working: true
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "low"
-    needs_retesting: false
     status_history:
       - working: true
         agent: "main"
-        comment: "MT5 code prepared for Windows. Runs in simulation mode on Linux."
+        comment: "SL placed below real swing lows for BUY, above real swing highs for SELL. TP targets real liquidity zones."
+
+  - task: "Entry at Current Market Price"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
 
 frontend:
-  - task: "Candlestick Chart with Lightweight Charts"
+  - task: "TradingView Full Widget with All Tools"
     implemented: true
     working: true
     file: "/app/frontend/src/App.js"
@@ -93,9 +68,9 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "TradingView-style chart with candlesticks, real-time updates every 2 seconds"
+        comment: "Full TradingView widget with trendlines, rectangles, Fibonacci, all timeframes, indicators"
 
-  - task: "Entry/SL/TP Horizontal Lines on Chart"
+  - task: "Signal Panel with Structure Data"
     implemented: true
     working: true
     file: "/app/frontend/src/App.js"
@@ -105,81 +80,32 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Horizontal price lines displayed after signal generation like TopStep X"
+        comment: "Shows Entry/SL/TP/RR and real structure analysis (trend, position, support, resistance, ATR)"
 
-  - task: "5 Advanced Strategies Dropdown"
+  - task: "Trade Execution at Market Price"
     implemented: true
     working: true
     file: "/app/frontend/src/App.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
-
-  - task: "Futures Market Selection"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/App.js"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
-
-  - task: "Trades Table with Only Close Button"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/App.js"
-    stuck_count: 0
-    priority: "medium"
     needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Removed SL/TP buttons, kept only 'Fermer' button for manual close"
-
-  - task: "Performance Page with Equity Curve"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/App.js"
-    stuck_count: 0
-    priority: "medium"
-    needs_retesting: true
-
-  - task: "Strategy Rankings"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/App.js"
-    stuck_count: 0
-    priority: "medium"
-    needs_retesting: true
-
-  - task: "Clear History Button"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/App.js"
-    stuck_count: 0
-    priority: "medium"
-    needs_retesting: true
-
-  - task: "Fluid PnL Updates (2 seconds)"
-    implemented: true
-    working: true
-    file: "/app/frontend/src/App.js"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: true
+        comment: "Fetches current price before trade execution, enters at live market price"
 
 metadata:
   created_by: "main_agent"
-  version: "3.0"
-  test_sequence: 2
+  version: "4.0"
+  test_sequence: 3
   run_ui: true
 
 test_plan:
   current_focus:
-    - "Candlestick Chart with Entry/SL/TP lines"
-    - "5 Advanced Strategies"
-    - "Futures Market"
-    - "Equity Curve"
-    - "Strategy Rankings"
+    - "Real market structure analysis"
+    - "Signal levels coherence"
+    - "Trade execution at market price"
+    - "TradingView widget functionality"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
@@ -187,31 +113,27 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      MAJOR UPDATE COMPLETED:
+      MAJOR UPDATE v4 - Real Market Structure Analysis:
       
-      1. CHART: Replaced TradingView iframe with Lightweight Charts candlestick chart
-         - Real-time price updates every 2 seconds
-         - Entry/SL/TP horizontal lines displayed after signal generation
-         
-      2. STRATEGIES: Implemented 5 advanced strategies:
-         - SMC/ICT Avancée (Smart Money + ICT concepts)
-         - Market Structure Avancé (HTF + LTF structure analysis)
-         - OrderBlock + Imbalances (FVG detection)
-         - Moyenne Mobile Avancé (EMA 9/21/50/200)
-         - OPR (Opening Price Range)
-         All with ATR-based volatility-aware SL/TP calculation
-         
-      3. FUTURES: Added ES, NQ, CL, GC, SI symbols to both backend and frontend
+      1. REAL DATA: Fetching actual OHLC candles from CoinGecko API (7 days)
+      2. STRUCTURE ANALYSIS: 
+         - Identifies real swing highs/lows
+         - Calculates actual ATR from price data
+         - Determines trend (BULLISH/BEARISH/RANGING)
+         - Finds nearest support/resistance levels
+         - Identifies liquidity zones
+      3. COHERENT SIGNALS:
+         - Entry: Current market price
+         - SL: Below real swing low (BUY) / Above real swing high (SELL)
+         - TP: Targeting real resistance (BUY) / support (SELL)
+         - RR: Minimum 2:1, adjusted by mode and timeframe
+      4. TRADINGVIEW: Full widget with all drawing tools restored
       
-      4. PERFORMANCE PAGE: 
-         - Equity curve chart
-         - Strategy rankings with medals (🥇🥈🥉)
-         - Clear history button
-         
-      5. TRADES: Removed SL/TP buttons, kept only manual "Fermer" button
-      
-      6. MT5: Code prepared for Windows deployment (runs in simulation on Linux)
-      
-      Please run E2E tests to validate all features.
+      TEST RESULT: Signal generated for BTC/USD
+      - Entry: 85178 (real price)
+      - SL: 82869 (below real support at 82614)
+      - TP: 89771 (towards real resistance at 87918)
+      - RR: 2.8:1
+      - Trend: BEARISH, Position: DISCOUNT
       
       Test credentials: newtrader2024@test.com / password123
