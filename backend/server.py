@@ -1120,6 +1120,18 @@ async def get_portfolio(user: dict = Depends(get_current_user)):
         "closed_trades": len(closed_trades)
     }
 
+@api_router.get("/chart-symbol/{symbol:path}")
+async def get_chart_symbol(symbol: str):
+    """Get TradingView symbol for chart display"""
+    tv_symbol = TRADINGVIEW_SYMBOLS.get(symbol, "BINANCE:BTCUSDT")
+    return {"symbol": symbol, "tradingview_symbol": tv_symbol}
+
+@api_router.get("/real-price/{symbol:path}")
+async def get_real_price_endpoint(symbol: str, user: dict = Depends(get_current_user)):
+    """Get real-time price from Yahoo Finance"""
+    price = await get_real_price(symbol)
+    return {"symbol": symbol, "price": price, "source": "yahoo_finance", "timestamp": datetime.now(timezone.utc).isoformat()}
+
 @api_router.get("/portfolio/equity-curve")
 async def get_equity_curve(user: dict = Depends(get_current_user)):
     """Get equity curve data for chart"""
