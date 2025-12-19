@@ -296,21 +296,21 @@ YAHOO_SYMBOLS = {
     "ES": "ES=F", "NQ": "NQ=F", "CL": "CL=F", "GC": "GC=F", "SI": "SI=F"
 }
 
-# TradingView symbol mapping for chart display
+# TradingView symbol mapping for chart display (FREE symbols only)
 TRADINGVIEW_SYMBOLS = {
     # Crypto
     "BTC/USD": "BINANCE:BTCUSDT", "ETH/USD": "BINANCE:ETHUSDT", "SOL/USD": "BINANCE:SOLUSDT",
     "XRP/USD": "BINANCE:XRPUSDT", "ADA/USD": "BINANCE:ADAUSDT",
-    # Forex
-    "EUR/USD": "FX:EURUSD", "GBP/USD": "FX:GBPUSD", "USD/JPY": "FX:USDJPY",
-    "AUD/USD": "FX:AUDUSD", "USD/CHF": "FX:USDCHF",
-    # Indices
-    "US30": "TVC:DJI", "US100": "NASDAQ:NDX", "US500": "SP:SPX",
-    "GER40": "XETR:DAX", "UK100": "TVC:UKX",
-    # Metals
-    "XAU/USD": "COMEX:GC1!", "XAG/USD": "COMEX:SI1!", "XPT/USD": "NYMEX:PL1!", "XPD/USD": "NYMEX:PA1!",
-    # Futures
-    "ES": "CME_MINI:ES1!", "NQ": "CME_MINI:NQ1!", "CL": "NYMEX:CL1!", "GC": "COMEX:GC1!", "SI": "COMEX:SI1!"
+    # Forex (FX_IDC is free)
+    "EUR/USD": "FX_IDC:EURUSD", "GBP/USD": "FX_IDC:GBPUSD", "USD/JPY": "FX_IDC:USDJPY",
+    "AUD/USD": "FX_IDC:AUDUSD", "USD/CHF": "FX_IDC:USDCHF",
+    # Indices (use ETFs as proxy - free)
+    "US30": "AMEX:DIA", "US100": "NASDAQ:QQQ", "US500": "AMEX:SPY",
+    "GER40": "XETR:DAX", "UK100": "LSE:ISF",
+    # Metals (use ETFs as proxy - free)
+    "XAU/USD": "AMEX:GLD", "XAG/USD": "AMEX:SLV", "XPT/USD": "AMEX:PPLT", "XPD/USD": "AMEX:PALL",
+    # Futures (use ETFs as proxy - free)
+    "ES": "AMEX:SPY", "NQ": "NASDAQ:QQQ", "CL": "AMEX:USO", "GC": "AMEX:GLD", "SI": "AMEX:SLV"
 }
 
 # Thread executor for yfinance (blocking calls)
