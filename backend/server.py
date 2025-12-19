@@ -868,7 +868,10 @@ async def ai_analyze(request: AIAnalysisRequest, user: dict = Depends(get_curren
     # Calculate levels based on REAL structure
     levels = calculate_signal_levels(price, structure, direction, mapped_strategy, request.mode, request.timeframe)
     
-    # Build strategy analysis with real data
+    # Build strategy analysis with real data including BOS and OB info
+    last_bos = structure.get("last_bos")
+    order_blocks = structure.get("order_blocks", [])
+    
     strategy_analysis = {
         "name": ADVANCED_STRATEGIES.get(mapped_strategy, {}).get("name", mapped_strategy),
         "trend": trend,
@@ -879,10 +882,17 @@ async def ai_analyze(request: AIAnalysisRequest, user: dict = Depends(get_curren
         "nearest_support": structure.get("nearest_support"),
         "recent_high": structure.get("recent_high"),
         "recent_low": structure.get("recent_low"),
+        "equilibrium": structure.get("equilibrium"),
         "swing_highs": structure.get("swing_highs", [])[:3],
         "swing_lows": structure.get("swing_lows", [])[:3],
         "liquidity_above": structure.get("liquidity_above", []),
         "liquidity_below": structure.get("liquidity_below", []),
+        "bos_bullish": structure.get("bos_bullish"),
+        "bos_bearish": structure.get("bos_bearish"),
+        "last_bos": last_bos,
+        "order_blocks": order_blocks,
+        "optimal_entry_buy": structure.get("optimal_entry_buy"),
+        "optimal_entry_sell": structure.get("optimal_entry_sell"),
         "bias": "Bullish" if direction == "BUY" else "Bearish"
     }
     
