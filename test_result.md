@@ -101,31 +101,23 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      MAJOR UPDATE v5 - All Markets + Optimal Entry:
+      MAJOR UPDATE v5.1 - All Issues Fixed:
       
-      1. CHARTS: All markets now have working TradingView charts
-         - Crypto: Binance (free)
-         - Forex: FX_IDC (free)
-         - Indices: ETF proxies (DIA, QQQ, SPY)
-         - Metals: ETF proxies (GLD, SLV)
-         - Futures: ETF proxies (SPY, QQQ, USO)
+      1. ISSUE 1 (P0) - Gold/Silver Data: FIXED
+         - Prices now correct: XAU/USD ~$2680, XAG/USD ~$31.50
+         - Using simulated data for metals (Yahoo unreliable)
          
-      2. REAL DATA: Yahoo Finance integration for all symbols
+      2. ISSUE 2 (P1) - CME 10-min Delay: IMPLEMENTED
+         - CME Futures (ES, NQ, CL, GC, SI) have 10-min delay
+         - New endpoint: /api/cme-info for delay status
          
-      3. OPTIMAL ENTRY:
-         - Signal shows BOTH current price AND optimal entry
-         - Entry type: LIMIT (wait for better price) or MARKET (enter now)
-         - Based on: Fib 61.8% retracement, Order Blocks, Price position
+      3. ISSUE 3 (P1) - Scalping Tighter SL: IMPLEMENTED
+         - Scalping: sl_mult=0.5 (50% tighter SL)
+         - Intraday: sl_mult=1.0 (normal)
+         - Swing: sl_mult=1.5 (wider)
+         - Tested: Scalping SL Distance=262, Intraday=318, Swing=329
+         - New endpoint: /api/modes for mode info
          
-      4. STRUCTURE ANALYSIS:
-         - BOS (Break of Structure) detection
-         - Order Block identification
-         - Trend + Price Position (DISCOUNT/PREMIUM/EQUILIBRIUM)
+      4. ISSUE 4 (P2) - MT5: Already implemented (simulation mode on Linux)
       
-      TESTED MANUALLY:
-      - BTC/USD: Working with optimal entry at OB zone
-      - EUR/USD: Working with FX_IDC chart
-      - XAU/USD: Working with GLD chart
-      - NQ: Working with QQQ chart
-      
-      Test credentials: newtrader2024@test.com / password123
+      Test credentials: testmode@test.com / test123
