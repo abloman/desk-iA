@@ -409,7 +409,7 @@ function TradingPage() {
             ✅ Exécuter Trade
           </button>
 
-          {/* Signal Preview with Optimal Entry */}
+          {/* Signal Summary */}
           {signal && (
             <div className="p-3 bg-slate-800 rounded-lg text-xs space-y-2">
               <div className="flex justify-between items-center">
@@ -418,69 +418,34 @@ function TradingPage() {
                   {signal.direction}
                 </span>
               </div>
-              <div className="flex justify-between text-slate-400">
-                <span>{signal.timeframe} • {signal.mode}</span>
-                <span className={signal.entry_type === "LIMIT" ? "text-amber-400" : "text-blue-400"}>
-                  {signal.entry_type === "LIMIT" ? "📍 Limite" : "⚡ Marché"}
-                </span>
-              </div>
+              <div className="text-slate-400 text-[10px]">{signal.timeframe} • {signal.mode} • {signal.strategy}</div>
               
-              {/* Entry Prices */}
-              <div className="py-2 border-y border-slate-700 space-y-1">
+              {/* Key Levels */}
+              <div className="py-2 border-y border-slate-700 space-y-1 text-[11px]">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Prix actuel:</span>
-                  <span className="text-white font-mono">{fmt(signal.current_price, 2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-400">Entrée optimale:</span>
+                  <span className="text-blue-400">Entrée:</span>
                   <span className="text-blue-400 font-mono font-bold">{fmt(signal.optimal_entry, 2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-red-400">Stop Loss:</span>
+                  <span className="text-red-400">SL:</span>
                   <span className="text-red-400 font-mono">{fmt(signal.sl, 2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-emerald-400">Take Profit:</span>
+                  <span className="text-emerald-400">TP:</span>
                   <span className="text-emerald-400 font-mono">{fmt(signal.tp, 2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-yellow-400">Risk:Reward:</span>
+                  <span className="text-yellow-400">RR:</span>
                   <span className="text-yellow-400 font-bold">{signal.rr}:1</span>
                 </div>
               </div>
               
-              {/* Structure Info */}
-              {signal.analysis && (
-                <div className="space-y-1 text-[10px]">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Trend:</span>
-                    <span className={signal.analysis.trend === "BULLISH" ? "text-emerald-400" : signal.analysis.trend === "BEARISH" ? "text-red-400" : "text-yellow-400"}>
-                      {signal.analysis.trend}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Zone:</span>
-                    <span className={signal.analysis.price_position === "DISCOUNT" ? "text-emerald-400" : signal.analysis.price_position === "PREMIUM" ? "text-red-400" : "text-white"}>
-                      {signal.analysis.price_position}
-                    </span>
-                  </div>
-                  {signal.analysis.last_bos && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">BOS:</span>
-                      <span className="text-purple-400 font-mono">{signal.analysis.last_bos.level?.toFixed(2)} ✓</span>
-                    </div>
-                  )}
-                  {signal.analysis.order_blocks?.length > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">OB:</span>
-                      <span className="text-cyan-400 font-mono">{signal.analysis.order_blocks[0].entry_zone?.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="text-center text-amber-400 font-bold">
+                Confiance: {signal.confidence}%
+              </div>
               
-              <div className="text-center pt-2 border-t border-slate-700">
-                <span className="text-amber-400 font-bold">Confiance: {signal.confidence}%</span>
+              <div className="text-[9px] text-slate-500 text-center">
+                Exécution au prix marché actuel
               </div>
             </div>
           )}
