@@ -828,7 +828,7 @@ function Select({ label, value, onChange, options }) {
 
 // ==================== TRADINGVIEW CHART COMPONENT ====================
 function TradingChartComponent({ symbol, signal, market }) {
-  // Convert symbol to TradingView format
+  // Convert symbol to TradingView format - supports ALL markets
   const getTvSymbol = () => {
     const tvMap = {
       // Crypto
@@ -840,8 +840,8 @@ function TradingChartComponent({ symbol, signal, market }) {
       // Indices
       "US30": "TVC:DJI", "US100": "NASDAQ:NDX", "US500": "SP:SPX",
       "GER40": "XETR:DAX", "UK100": "TVC:UKX",
-      // Metals
-      "XAU/USD": "TVC:GOLD", "XAG/USD": "TVC:SILVER", "XPT/USD": "TVC:PLATINUM", "XPD/USD": "TVC:PALLADIUM",
+      // Metals (use futures for real prices)
+      "XAU/USD": "COMEX:GC1!", "XAG/USD": "COMEX:SI1!", "XPT/USD": "NYMEX:PL1!", "XPD/USD": "NYMEX:PA1!",
       // Futures
       "ES": "CME_MINI:ES1!", "NQ": "CME_MINI:NQ1!", "CL": "NYMEX:CL1!", "GC": "COMEX:GC1!", "SI": "COMEX:SI1!"
     };
@@ -861,44 +861,78 @@ function TradingChartComponent({ symbol, signal, market }) {
         allowFullScreen
       />
       
-      {/* Signal Levels Panel */}
+      {/* Signal Levels Panel - Shows OPTIMAL ENTRY */}
       {signal && (
         <div className="mt-3 p-3 bg-slate-800/80 rounded-lg border border-slate-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
               <span className={`px-3 py-1 rounded font-bold text-sm ${signal.direction === "BUY" ? "bg-emerald-600" : "bg-red-600"}`}>
                 {signal.direction}
               </span>
-              <span className="text-slate-400 text-sm">Signal {symbol}</span>
+              <span className="text-slate-400 text-sm">{symbol}</span>
+              <span className={`px-2 py-0.5 rounded text-xs ${signal.entry_type === "LIMIT" ? "bg-amber-600" : "bg-blue-600"}`}>
+                {signal.entry_type === "LIMIT" ? "📍 Ordre Limite" : "⚡ Marché"}
+              </span>
             </div>
-            <div className="flex items-center gap-6 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-1 bg-blue-500 rounded"></span>
-                <span className="text-slate-400">Entry:</span>
-                <span className="font-mono text-white font-bold">{signal.entry?.toFixed(2)}</span>
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-slate-500">Prix Actuel</span>
+                <span className="font-mono text-white">{signal.current_price?.toFixed(2)}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-1 bg-red-500 rounded"></span>
-                <span className="text-slate-400">SL:</span>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-blue-400">Entrée Optimale</span>
+                <span className="font-mono text-blue-400 font-bold">{signal.optimal_entry?.toFixed(2)}</span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-red-400">Stop Loss</span>
                 <span className="font-mono text-red-400 font-bold">{signal.sl?.toFixed(2)}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-1 bg-emerald-500 rounded"></span>
-                <span className="text-slate-400">TP:</span>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-emerald-400">Take Profit</span>
                 <span className="font-mono text-emerald-400 font-bold">{signal.tp?.toFixed(2)}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400">RR:</span>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] text-yellow-400">R:R</span>
                 <span className="font-mono text-yellow-400 font-bold">{signal.rr?.toFixed(1)}:1</span>
               </div>
             </div>
           </div>
+          
+          {/* Structure Analysis */}
           {signal.structure && (
-            <div className="mt-2 pt-2 border-t border-slate-700 grid grid-cols-4 gap-4 text-xs">
-              <div><span className="text-slate-500">Trend:</span> <span className={signal.structure.trend === "BULLISH" ? "text-emerald-400" : signal.structure.trend === "BEARISH" ? "text-red-400" : "text-yellow-400"}>{signal.structure.trend}</span></div>
-              <div><span className="text-slate-500">Position:</span> <span className="text-white">{signal.structure.price_position}</span></div>
-              <div><span className="text-slate-500">Support:</span> <span className="text-emerald-400">{signal.structure.nearest_support}</span></div>
-              <div><span className="text-slate-500">Resistance:</span> <span className="text-red-400">{signal.structure.nearest_resistance}</span></div>
+            <div className="mt-2 pt-2 border-t border-slate-700 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Trend:</span>
+                <span className={signal.structure.trend === "BULLISH" ? "text-emerald-400" : signal.structure.trend === "BEARISH" ? "text-red-400" : "text-yellow-400"}>
+                  {signal.structure.trend}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Position:</span>
+                <span className={signal.structure.price_position === "DISCOUNT" ? "text-emerald-400" : signal.structure.price_position === "PREMIUM" ? "text-red-400" : "text-white"}>
+                  {signal.structure.price_position}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Support:</span>
+                <span className="text-emerald-400 font-mono">{signal.structure.nearest_support?.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Résistance:</span>
+                <span className="text-red-400 font-mono">{signal.structure.nearest_resistance?.toFixed(2)}</span>
+              </div>
+              {signal.structure.last_bos && (
+                <div className="flex justify-between col-span-2">
+                  <span className="text-slate-500">Dernier BOS:</span>
+                  <span className="text-purple-400 font-mono">{signal.structure.last_bos.level?.toFixed(2)} ✓</span>
+                </div>
+              )}
+              {signal.structure.order_blocks?.length > 0 && (
+                <div className="flex justify-between col-span-2">
+                  <span className="text-slate-500">Order Block:</span>
+                  <span className="text-cyan-400 font-mono">{signal.structure.order_blocks[0].entry_zone?.toFixed(2)}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
