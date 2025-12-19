@@ -260,22 +260,24 @@ function TradingPage() {
         symbol, timeframe, market_type: market, mode, strategy
       });
       if (res.data.analysis) {
+        const a = res.data.analysis;
         setSignal({
           symbol,
           timeframe,
           mode,
           strategy,
-          side: res.data.analysis.signal,
-          entry: res.data.analysis.entry_price,
-          sl: res.data.analysis.stop_loss,
-          tp: res.data.analysis.take_profit_1,
-          tp2: res.data.analysis.take_profit_2,
-          rr: res.data.analysis.rr_ratio,
-          confidence: res.data.analysis.confidence,
-          analysis: res.data.analysis.analysis,
-          reasoning: res.data.analysis.reasoning
+          direction: a.signal,
+          entry: a.entry_price,
+          sl: a.stop_loss,
+          tp: a.take_profit_1,
+          tp2: a.take_profit_2,
+          tp3: a.take_profit_3,
+          rr: a.rr_ratio,
+          confidence: a.confidence,
+          analysis: a.analysis,  // Contains structure data
+          reasoning: a.reasoning
         });
-        setMessage("Signal généré !");
+        setMessage("Signal généré avec analyse de structure réelle !");
       }
     } catch (e) {
       setMessage("Erreur: " + (e.response?.data?.detail || e.message));
