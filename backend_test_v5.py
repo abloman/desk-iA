@@ -242,40 +242,43 @@ class AlphaMindV5Tester:
         success, modes_data = self.run_test("Modes Configuration Endpoint", "GET", "modes", 200)
         
         if success:
-            modes = modes_data.get('modes', {})
+            modes_list = modes_data.get('modes', [])
             
-            # Check scalping mode (should have sl_mult = 0.5 for tighter SL)
+            # Convert list to dict for easier access
+            modes = {mode['id']: mode for mode in modes_list}
+            
+            # Check scalping mode (should have sl_multiplier = 0.5 for tighter SL)
             scalping = modes.get('scalping', {})
-            scalping_sl_mult = scalping.get('sl_mult')
+            scalping_sl_mult = scalping.get('sl_multiplier')
             
             self.log_test(
-                "Scalping mode has tighter SL (sl_mult=0.5)",
+                "Scalping mode has tighter SL (sl_multiplier=0.5)",
                 scalping_sl_mult == 0.5,
-                f"Scalping sl_mult is {scalping_sl_mult}",
+                f"Scalping sl_multiplier is {scalping_sl_mult}",
                 "0.5 (tighter SL)",
                 str(scalping_sl_mult)
             )
             
-            # Check intraday mode (should have sl_mult = 1.0 for normal SL)
+            # Check intraday mode (should have sl_multiplier = 1.0 for normal SL)
             intraday = modes.get('intraday', {})
-            intraday_sl_mult = intraday.get('sl_mult')
+            intraday_sl_mult = intraday.get('sl_multiplier')
             
             self.log_test(
-                "Intraday mode has normal SL (sl_mult=1.0)",
+                "Intraday mode has normal SL (sl_multiplier=1.0)",
                 intraday_sl_mult == 1.0,
-                f"Intraday sl_mult is {intraday_sl_mult}",
+                f"Intraday sl_multiplier is {intraday_sl_mult}",
                 "1.0 (normal SL)",
                 str(intraday_sl_mult)
             )
             
-            # Check swing mode (should have sl_mult = 1.5 for wider SL)
+            # Check swing mode (should have sl_multiplier = 1.5 for wider SL)
             swing = modes.get('swing', {})
-            swing_sl_mult = swing.get('sl_mult')
+            swing_sl_mult = swing.get('sl_multiplier')
             
             self.log_test(
-                "Swing mode has wider SL (sl_mult=1.5)",
+                "Swing mode has wider SL (sl_multiplier=1.5)",
                 swing_sl_mult == 1.5,
-                f"Swing sl_mult is {swing_sl_mult}",
+                f"Swing sl_multiplier is {swing_sl_mult}",
                 "1.5 (wider SL)",
                 str(swing_sl_mult)
             )
