@@ -1642,11 +1642,54 @@ async def get_strategies():
         ]
     }
 
+@api_router.get("/cme-info")
+async def get_cme_info():
+    """Get CME futures delay information"""
+    return {
+        "cme_futures": CME_FUTURES,
+        "delay_minutes": CME_DELAY_MINUTES,
+        "cache_status": {symbol: {
+            "cached": symbol in CME_CACHE or f"{symbol}_7d_1h" in CME_CACHE,
+            "timestamp": CME_CACHE.get(f"{symbol}_7d_1h", {}).get("timestamp", "").isoformat() 
+                if CME_CACHE.get(f"{symbol}_7d_1h", {}).get("timestamp") else None
+        } for symbol in CME_FUTURES},
+        "message": f"CME futures data is delayed by {CME_DELAY_MINUTES} minutes as per exchange requirements"
+    }
+
+@api_router.get("/modes")
+async def get_modes():
+    """Get available trading modes with SL configuration"""
+    return {
+        "modes": [
+            {
+                "id": "scalping",
+                "name": "Scalping",
+                "description": "Trades rapides avec SL serré (50% plus proche)",
+                "sl_multiplier": 0.5,
+                "min_rr": 1.5
+            },
+            {
+                "id": "intraday", 
+                "name": "Intraday",
+                "description": "Trades journaliers avec SL standard",
+                "sl_multiplier": 1.0,
+                "min_rr": 2.0
+            },
+            {
+                "id": "swing",
+                "name": "Swing",
+                "description": "Trades sur plusieurs jours avec SL plus large",
+                "sl_multiplier": 1.5,
+                "min_rr": 2.5
+            }
+        ]
+    }
+
 # ==================== MAIN ====================
 
 @api_router.get("/")
 async def root():
-    return {"message": "AlphaMind Trading API v3.0", "status": "online", "mt5_available": MT5_AVAILABLE}
+    return {"message": "AlphaMind Trading API v3.1", "status": "online", "mt5_available": MT5_AVAILABLE, "cme_delay_minutes": CME_DELAY_MINUTES}
 
 @api_router.get("/health")
 async def health():
