@@ -365,7 +365,7 @@ async def get_real_price(symbol: str) -> float:
     return await get_current_price(symbol)
 
 def analyze_market_structure(ohlc_data: List[Dict], current_price: float) -> Dict:
-    """Analyze real market structure: swing highs/lows, trend, liquidity zones"""
+    """Analyze real market structure: swing highs/lows, BOS, trend, liquidity zones, optimal entry"""
     if len(ohlc_data) < 10:
         return {"error": "Insufficient data"}
     
@@ -378,34 +378,51 @@ def analyze_market_structure(ohlc_data: List[Dict], current_price: float) -> Dic
     swing_lows = []
     
     for i in range(2, len(ohlc_data) - 2):
-        # Swing high: higher than 2 candles before and after
         if highs[i] > highs[i-1] and highs[i] > highs[i-2] and highs[i] > highs[i+1] and highs[i] > highs[i+2]:
-            swing_highs.append({"price": highs[i], "index": i})
-        # Swing low
+            swing_highs.append({"price": highs[i], "index": i, "time": ohlc_data[i]["time"]})
         if lows[i] < lows[i-1] and lows[i] < lows[i-2] and lows[i] < lows[i+1] and lows[i] < lows[i+2]:
-            swing_lows.append({"price": lows[i], "index": i})
+            swing_lows.append({"price": lows[i], "index": i, "time": ohlc_data[i]["time"]})
     
-    # Get recent swings (last 5)
     recent_highs = sorted(swing_highs, key=lambda x: x["index"], reverse=True)[:5]
     recent_lows = sorted(swing_lows, key=lambda x: x["index"], reverse=True)[:5]
     
-    # Determine trend
+    # Detect BOS (Break of Structure)
+    bos_bullish = None
+    bos_bearish = None
+    last_bos = None
+    
     if len(recent_highs) >= 2 and len(recent_lows) >= 2:
-        higher_highs = recent_highs[0]["price"] > recent_highs[1]["price"] if len(recent_highs) >= 2 else False
-        higher_lows = recent_lows[0]["price"] > recent_lows[1]["price"] if len(recent_lows) >= 2 else False
-        lower_highs = recent_highs[0]["price"] < recent_highs[1]["price"] if len(recent_highs) >= 2 else False
-        lower_lows = recent_lows[0]["price"] < recent_lows[1]["price"] if len(recent_lows) >= 2 else False
+        # BOS Bullish: Current price broke above previous swing high
+        for i, sh in enumerate(recent_highs[:-1]):
+            if current_price > sh["price"]:
+                bos_bullish = {"level": sh["price"], "broken": True, "index": sh["index"]}
+                break
+        
+        # BOS Bearish: Current price broke below previous swing low
+        for i, sl in enumerate(recent_lows[:-1]):
+            if current_price < sl["price"]:
+                bos_bearish = {"level": sl["price"], "broken": True, "index": sl["index"]}
+                break
+    
+    # Determine trend based on structure
+    if len(recent_highs) >= 2 and len(recent_lows) >= 2:
+        higher_highs = recent_highs[0]["price"] > recent_highs[1]["price"]
+        higher_lows = recent_lows[0]["price"] > recent_lows[1]["price"]
+        lower_highs = recent_highs[0]["price"] < recent_highs[1]["price"]
+        lower_lows = recent_lows[0]["price"] < recent_lows[1]["price"]
         
         if higher_highs and higher_lows:
             trend = "BULLISH"
+            last_bos = bos_bullish
         elif lower_highs and lower_lows:
             trend = "BEARISH"
+            last_bos = bos_bearish
         else:
             trend = "RANGING"
     else:
         trend = "UNDEFINED"
     
-    # Calculate ATR (Average True Range)
+    # Calculate ATR
     true_ranges = []
     for i in range(1, len(ohlc_data)):
         tr = max(
@@ -416,31 +433,90 @@ def analyze_market_structure(ohlc_data: List[Dict], current_price: float) -> Dic
         true_ranges.append(tr)
     atr = sum(true_ranges[-14:]) / min(14, len(true_ranges)) if true_ranges else current_price * 0.02
     
-    # Identify liquidity zones (areas with multiple swing points)
+    # Recent high/low and 50% level (equilibrium)
+    recent_high = max(highs[-20:]) if len(highs) >= 20 else max(highs)
+    recent_low = min(lows[-20:]) if len(lows) >= 20 else min(lows)
+    equilibrium = (recent_high + recent_low) / 2
+    
+    # Price position relative to range
+    range_size = recent_high - recent_low
+    if range_size > 0:
+        price_pct = (current_price - recent_low) / range_size * 100
+        if price_pct > 70:
+            price_position = "PREMIUM"
+        elif price_pct < 30:
+            price_position = "DISCOUNT"
+        else:
+            price_position = "EQUILIBRIUM"
+    else:
+        price_position = "NEUTRAL"
+    
+    # Calculate OPTIMAL ENTRY (not current price)
+    # For BUY: Entry at 50%-61.8% retracement of last bullish move (discount)
+    # For SELL: Entry at 50%-61.8% retracement of last bearish move (premium)
+    
+    optimal_entry_buy = None
+    optimal_entry_sell = None
+    
+    if len(recent_lows) >= 1 and recent_high > recent_low:
+        # Optimal BUY entry: 50% retracement from recent high to recent low
+        fib_50 = recent_high - (range_size * 0.5)
+        fib_618 = recent_high - (range_size * 0.618)
+        optimal_entry_buy = round(fib_618, 2)  # 61.8% is better value
+        
+        # Optimal SELL entry: 50% retracement from recent low to recent high  
+        optimal_entry_sell = round(recent_low + (range_size * 0.618), 2)
+    
+    # Order Block detection (simplified: last bearish candle before bullish move, vice versa)
+    order_blocks = []
+    for i in range(len(ohlc_data) - 5, len(ohlc_data) - 1):
+        if i > 0:
+            # Bullish OB: Bearish candle followed by strong bullish move
+            if ohlc_data[i]["close"] < ohlc_data[i]["open"]:  # Bearish candle
+                if ohlc_data[i+1]["close"] > ohlc_data[i]["high"]:  # Strong bullish break
+                    order_blocks.append({
+                        "type": "BULLISH_OB",
+                        "high": ohlc_data[i]["high"],
+                        "low": ohlc_data[i]["low"],
+                        "entry_zone": round((ohlc_data[i]["high"] + ohlc_data[i]["low"]) / 2, 2)
+                    })
+            # Bearish OB
+            if ohlc_data[i]["close"] > ohlc_data[i]["open"]:  # Bullish candle
+                if ohlc_data[i+1]["close"] < ohlc_data[i]["low"]:  # Strong bearish break
+                    order_blocks.append({
+                        "type": "BEARISH_OB",
+                        "high": ohlc_data[i]["high"],
+                        "low": ohlc_data[i]["low"],
+                        "entry_zone": round((ohlc_data[i]["high"] + ohlc_data[i]["low"]) / 2, 2)
+                    })
+    
+    # Liquidity zones
     liquidity_above = [h["price"] for h in recent_highs if h["price"] > current_price]
     liquidity_below = [l["price"] for l in recent_lows if l["price"] < current_price]
     
-    # Get nearest support and resistance
-    nearest_resistance = min(liquidity_above) if liquidity_above else current_price * 1.03
-    nearest_support = max(liquidity_below) if liquidity_below else current_price * 0.97
-    
-    # Recent high and low for context
-    recent_high = max(highs[-20:]) if len(highs) >= 20 else max(highs)
-    recent_low = min(lows[-20:]) if len(lows) >= 20 else min(lows)
+    nearest_resistance = min(liquidity_above) if liquidity_above else recent_high
+    nearest_support = max(liquidity_below) if liquidity_below else recent_low
     
     return {
         "trend": trend,
         "atr": round(atr, 2),
-        "atr_pct": round((atr / current_price) * 100, 2),
-        "swing_highs": [h["price"] for h in recent_highs],
-        "swing_lows": [l["price"] for l in recent_lows],
+        "atr_pct": round((atr / current_price) * 100, 2) if current_price > 0 else 0,
+        "swing_highs": [round(h["price"], 2) for h in recent_highs],
+        "swing_lows": [round(l["price"], 2) for l in recent_lows],
         "nearest_resistance": round(nearest_resistance, 2),
         "nearest_support": round(nearest_support, 2),
         "recent_high": round(recent_high, 2),
         "recent_low": round(recent_low, 2),
-        "liquidity_above": sorted(liquidity_above)[:3] if liquidity_above else [],
-        "liquidity_below": sorted(liquidity_below, reverse=True)[:3] if liquidity_below else [],
-        "price_position": "PREMIUM" if current_price > (recent_high + recent_low) / 2 else "DISCOUNT"
+        "equilibrium": round(equilibrium, 2),
+        "price_position": price_position,
+        "bos_bullish": bos_bullish,
+        "bos_bearish": bos_bearish,
+        "last_bos": last_bos,
+        "optimal_entry_buy": optimal_entry_buy,
+        "optimal_entry_sell": optimal_entry_sell,
+        "order_blocks": order_blocks[-3:] if order_blocks else [],
+        "liquidity_above": sorted([round(x, 2) for x in liquidity_above])[:3] if liquidity_above else [],
+        "liquidity_below": sorted([round(x, 2) for x in liquidity_below], reverse=True)[:3] if liquidity_below else []
     }
 
 def calculate_signal_levels(
