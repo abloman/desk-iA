@@ -696,15 +696,17 @@ def calculate_signal_levels(
                 optimal_entry = equilibrium  # Wait for equilibrium at least
                 entry_type = "LIMIT"
         
-        # SL below swing low with buffer
+        # SL below swing low with buffer - TIGHTER for scalping mode
         swing_lows = structure.get("swing_lows", [])
         valid_lows = [l for l in swing_lows if l < optimal_entry]
         if valid_lows:
             sl_base = max(valid_lows)
         else:
-            sl_base = structure.get("nearest_support", optimal_entry - atr * 1.5)
+            sl_base = structure.get("nearest_support", optimal_entry - atr * 1.5 * config["sl_mult"])
         
-        sl = sl_base - (atr * config["sl_buffer"] * tf)
+        # Apply sl_mult: scalping = 0.5 (tighter), swing = 1.5 (wider)
+        sl_buffer_adjusted = atr * config["sl_buffer"] * tf * config["sl_mult"]
+        sl = sl_base - sl_buffer_adjusted
         
         # TP targets
         liquidity_above = structure.get("liquidity_above", [])
