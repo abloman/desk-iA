@@ -37,6 +37,13 @@ api_router = APIRouter(prefix="/api")
 PRICE_CACHE = {}
 PRICE_CACHE_TIME = None
 
+# ==================== CME FUTURES CACHE (10 MIN DELAY) ====================
+CME_CACHE = {}  # {symbol: {"data": [], "timestamp": datetime}}
+CME_DELAY_MINUTES = 10
+
+# CME Futures symbols that require 10-min delay
+CME_FUTURES = ["ES", "NQ", "CL", "GC", "SI"]
+
 # ==================== MODELS ====================
 
 class UserCreate(BaseModel):
@@ -393,9 +400,56 @@ def _generate_simulated_ohlc(symbol: str, count: int = 100) -> List[Dict]:
     return data
 
 async def fetch_ohlc_data(symbol: str, period: str = "7d", interval: str = "1h") -> List[Dict]:
-    """Async wrapper for Yahoo Finance data"""
+    """Async wrapper for Yahoo Finance data with CME 10-min delay for futures"""
     loop = asyncio.get_event_loop()
+    
+    # Check if this is a CME future requiring delay
+    if symbol in CME_FUTURES:
+        return await fetch_cme_data_with_delay(symbol, period, interval)
+    
     return await loop.run_in_executor(executor, _fetch_yf_data, symbol, period, interval)
+
+async def fetch_cme_data_with_delay(symbol: str, period: str = "7d", interval: str = "1h") -> List[Dict]:
+    """Fetch CME futures data with 10-minute delay"""
+    global CME_CACHE
+    
+    now = datetime.now(timezone.utc)
+    cache_key = f"{symbol}_{period}_{interval}"
+    
+    # Check cache
+    if cache_key in CME_CACHE:
+        cached = CME_CACHE[cache_key]
+        cache_age = (now - cached["timestamp"]).total_seconds() / 60
+        
+        # If cache is fresh (less than 10 min old), return it with delay applied
+        if cache_age < CME_DELAY_MINUTES:
+            return cached["data"]
+    
+    # Fetch fresh data
+    loop = asyncio.get_event_loop()
+    raw_data = await loop.run_in_executor(executor, _fetch_yf_data, symbol, period, interval)
+    
+    if raw_data:
+        # Apply 10-minute delay: shift all timestamps back by 10 minutes
+        delay_ms = CME_DELAY_MINUTES * 60 * 1000
+        delayed_data = []
+        
+        for candle in raw_data:
+            delayed_candle = candle.copy()
+            # Only include data that is at least 10 min old
+            if candle["time"] <= (int(now.timestamp()) - CME_DELAY_MINUTES * 60) * 1000:
+                delayed_data.append(delayed_candle)
+        
+        # Cache the delayed data
+        CME_CACHE[cache_key] = {
+            "data": delayed_data if delayed_data else raw_data,
+            "timestamp": now
+        }
+        
+        logging.info(f"CME {symbol}: Serving {len(delayed_data)} candles with 10-min delay")
+        return delayed_data if delayed_data else raw_data
+    
+    return raw_data
 
 def _get_yf_price(symbol: str) -> float:
     """Get current price from Yahoo Finance (blocking)"""
@@ -602,10 +656,11 @@ def calculate_signal_levels(
     price_position = structure.get("price_position", "NEUTRAL")
     
     # Mode config: RR requirements vary by mode
+    # SCALPING: Tighter SL (smaller sl_mult = closer stop), lower RR requirement
     mode_config = {
-        "scalping": {"min_rr": 1.5, "sl_buffer": 0.3},
-        "intraday": {"min_rr": 2.0, "sl_buffer": 0.2},
-        "swing": {"min_rr": 2.5, "sl_buffer": 0.15}
+        "scalping": {"min_rr": 1.5, "sl_buffer": 0.15, "sl_mult": 0.5},  # 50% tighter SL
+        "intraday": {"min_rr": 2.0, "sl_buffer": 0.2, "sl_mult": 1.0},   # Normal SL
+        "swing": {"min_rr": 2.5, "sl_buffer": 0.15, "sl_mult": 1.5}       # Wider SL for swing
     }
     
     # Timeframe adjustments for SL buffer
@@ -641,15 +696,17 @@ def calculate_signal_levels(
                 optimal_entry = equilibrium  # Wait for equilibrium at least
                 entry_type = "LIMIT"
         
-        # SL below swing low with buffer
+        # SL below swing low with buffer - TIGHTER for scalping mode
         swing_lows = structure.get("swing_lows", [])
         valid_lows = [l for l in swing_lows if l < optimal_entry]
         if valid_lows:
             sl_base = max(valid_lows)
         else:
-            sl_base = structure.get("nearest_support", optimal_entry - atr * 1.5)
+            sl_base = structure.get("nearest_support", optimal_entry - atr * 1.5 * config["sl_mult"])
         
-        sl = sl_base - (atr * config["sl_buffer"] * tf)
+        # Apply sl_mult: scalping = 0.5 (tighter), swing = 1.5 (wider)
+        sl_buffer_adjusted = atr * config["sl_buffer"] * tf * config["sl_mult"]
+        sl = sl_base - sl_buffer_adjusted
         
         # TP targets
         liquidity_above = structure.get("liquidity_above", [])
@@ -691,15 +748,17 @@ def calculate_signal_levels(
                 optimal_entry = equilibrium
                 entry_type = "LIMIT"
         
-        # SL above swing high with buffer
+        # SL above swing high with buffer - TIGHTER for scalping mode
         swing_highs = structure.get("swing_highs", [])
         valid_highs = [h for h in swing_highs if h > optimal_entry]
         if valid_highs:
             sl_base = min(valid_highs)
         else:
-            sl_base = structure.get("nearest_resistance", optimal_entry + atr * 1.5)
+            sl_base = structure.get("nearest_resistance", optimal_entry + atr * 1.5 * config["sl_mult"])
         
-        sl = sl_base + (atr * config["sl_buffer"] * tf)
+        # Apply sl_mult: scalping = 0.5 (tighter), swing = 1.5 (wider)
+        sl_buffer_adjusted = atr * config["sl_buffer"] * tf * config["sl_mult"]
+        sl = sl_base + sl_buffer_adjusted
         
         # TP targets
         liquidity_below = structure.get("liquidity_below", [])
@@ -773,13 +832,21 @@ ADVANCED_STRATEGIES = {
     }
 }
 
-def calculate_levels_advanced(price: float, direction: str, strategy: str, symbol: str, volatility: Dict) -> Dict:
-    """Calculate entry, SL, TP based on advanced strategy with volatility consideration"""
+def calculate_levels_advanced(price: float, direction: str, strategy: str, symbol: str, volatility: Dict, mode: str = "intraday") -> Dict:
+    """Calculate entry, SL, TP based on advanced strategy with volatility and mode consideration"""
     
     atr = volatility["atr"]
     strat = ADVANCED_STRATEGIES.get(strategy, ADVANCED_STRATEGIES["smc_ict_advanced"])
     
-    sl_distance = atr * strat["sl_atr_mult"]
+    # Mode multiplier for SL: scalping = tighter SL, swing = wider SL
+    mode_sl_mult = {
+        "scalping": 0.5,   # 50% tighter SL for scalping
+        "intraday": 1.0,   # Normal SL
+        "swing": 1.5       # 50% wider SL for swing trades
+    }
+    sl_mult = mode_sl_mult.get(mode, 1.0)
+    
+    sl_distance = atr * strat["sl_atr_mult"] * sl_mult
     tp_distance = atr * strat["tp_atr_mult"]
     
     # Ensure minimum RR ratio
@@ -807,7 +874,9 @@ def calculate_levels_advanced(price: float, direction: str, strategy: str, symbo
         "tp3": round(tp3, decimals),
         "rr": round(tp_distance / sl_distance, 2),
         "sl_pips": round(sl_distance, decimals),
-        "tp_pips": round(tp_distance, decimals)
+        "tp_pips": round(tp_distance, decimals),
+        "mode": mode,
+        "sl_multiplier": sl_mult
     }
 
 def generate_advanced_analysis(strategy: str, price: float, symbol: str, volatility: Dict) -> Dict:
@@ -1573,11 +1642,54 @@ async def get_strategies():
         ]
     }
 
+@api_router.get("/cme-info")
+async def get_cme_info():
+    """Get CME futures delay information"""
+    return {
+        "cme_futures": CME_FUTURES,
+        "delay_minutes": CME_DELAY_MINUTES,
+        "cache_status": {symbol: {
+            "cached": symbol in CME_CACHE or f"{symbol}_7d_1h" in CME_CACHE,
+            "timestamp": CME_CACHE.get(f"{symbol}_7d_1h", {}).get("timestamp", "").isoformat() 
+                if CME_CACHE.get(f"{symbol}_7d_1h", {}).get("timestamp") else None
+        } for symbol in CME_FUTURES},
+        "message": f"CME futures data is delayed by {CME_DELAY_MINUTES} minutes as per exchange requirements"
+    }
+
+@api_router.get("/modes")
+async def get_modes():
+    """Get available trading modes with SL configuration"""
+    return {
+        "modes": [
+            {
+                "id": "scalping",
+                "name": "Scalping",
+                "description": "Trades rapides avec SL serré (50% plus proche)",
+                "sl_multiplier": 0.5,
+                "min_rr": 1.5
+            },
+            {
+                "id": "intraday", 
+                "name": "Intraday",
+                "description": "Trades journaliers avec SL standard",
+                "sl_multiplier": 1.0,
+                "min_rr": 2.0
+            },
+            {
+                "id": "swing",
+                "name": "Swing",
+                "description": "Trades sur plusieurs jours avec SL plus large",
+                "sl_multiplier": 1.5,
+                "min_rr": 2.5
+            }
+        ]
+    }
+
 # ==================== MAIN ====================
 
 @api_router.get("/")
 async def root():
-    return {"message": "AlphaMind Trading API v3.0", "status": "online", "mt5_available": MT5_AVAILABLE}
+    return {"message": "AlphaMind Trading API v3.1", "status": "online", "mt5_available": MT5_AVAILABLE, "cme_delay_minutes": CME_DELAY_MINUTES}
 
 @api_router.get("/health")
 async def health():
