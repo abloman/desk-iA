@@ -862,6 +862,7 @@ function TradingChartComponent({ symbol, signal, trades = [], onPriceUpdate }) {
       crosshair: { mode: 1 },
       rightPriceScale: { borderColor: '#334155', scaleMargins: { top: 0.1, bottom: 0.2 } },
       timeScale: { borderColor: '#334155', timeVisible: true, secondsVisible: false },
+      localization: { locale: 'en-US' },
     });
     chartRef.current = chart;
 
