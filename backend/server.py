@@ -1151,14 +1151,39 @@ async def get_portfolio(user: dict = Depends(get_current_user)):
         "closed_trades": len(closed_trades)
     }
 
-@api_router.get("/chart-symbol/{symbol:path}")
-async def get_chart_symbol(symbol: str):
-    """Get TradingView symbol for chart display"""
-    tv_symbol = TRADINGVIEW_SYMBOLS.get(symbol, "BINANCE:BTCUSDT")
-    return {"symbol": symbol, "tradingview_symbol": tv_symbol}
+@api_router.get("/chart-data/{symbol:path}")
+async def get_chart_data(symbol: str, period: str = "7d", interval: str = "15m"):
+    """Get OHLC data for chart from Yahoo Finance"""
+    ohlc_data = await fetch_ohlc_data(symbol, period=period, interval=interval)
+    
+    if not ohlc_data:
+        # Fallback: generate simulated data
+        base_price = BASE_PRICES.get(symbol, 100)
+        ohlc_data = []
+        now = int(datetime.now(timezone.utc).timestamp())
+        for i in range(100, 0, -1):
+            price = base_price * (1 + (i - 50) * 0.001)
+            ohlc_data.append({
+                "time": now - (i * 900),
+                "open": price,
+                "high": price * 1.002,
+                "low": price * 0.998,
+                "close": price * (1 + (0.001 if i % 2 == 0 else -0.001))
+            })
+    
+    # Get current price
+    current_price = ohlc_data[-1]["close"] if ohlc_data else BASE_PRICES.get(symbol, 100)
+    
+    return {
+        "symbol": symbol,
+        "yahoo_symbol": YAHOO_SYMBOLS.get(symbol, symbol),
+        "data": ohlc_data,
+        "current_price": current_price,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 @api_router.get("/real-price/{symbol:path}")
-async def get_real_price_endpoint(symbol: str, user: dict = Depends(get_current_user)):
+async def get_real_price_endpoint(symbol: str):
     """Get real-time price from Yahoo Finance"""
     price = await get_real_price(symbol)
     return {"symbol": symbol, "price": price, "source": "yahoo_finance", "timestamp": datetime.now(timezone.utc).isoformat()}
