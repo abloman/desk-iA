@@ -290,10 +290,19 @@ YAHOO_SYMBOLS = {
     # Indices
     "US30": "^DJI", "US100": "^IXIC", "US500": "^GSPC",
     "GER40": "^GDAXI", "UK100": "^FTSE",
-    # Metals (Futures)
-    "XAU/USD": "GC=F", "XAG/USD": "SI=F", "XPT/USD": "PL=F", "XPD/USD": "PA=F",
-    # Futures
+    # Metals - use simulated prices (Yahoo data unreliable for metals)
+    "XAU/USD": "XAU/USD", "XAG/USD": "XAG/USD", "XPT/USD": "XPT/USD", "XPD/USD": "XPD/USD",
+    # Futures CME (10 min delay)
     "ES": "ES=F", "NQ": "NQ=F", "CL": "CL=F", "GC": "GC=F", "SI": "SI=F"
+}
+
+# Expected price ranges for validation
+PRICE_RANGES = {
+    "BTC/USD": (50000, 150000), "ETH/USD": (1500, 5000), "SOL/USD": (50, 500),
+    "EUR/USD": (0.9, 1.3), "GBP/USD": (1.1, 1.5), "USD/JPY": (100, 180),
+    "US30": (30000, 50000), "US100": (15000, 30000), "US500": (4000, 8000),
+    "XAU/USD": (2000, 3500), "XAG/USD": (20, 50),
+    "ES": (4000, 8000), "NQ": (15000, 30000), "CL": (40, 120),
 }
 
 # TradingView symbol mapping for chart display (FREE symbols only)
