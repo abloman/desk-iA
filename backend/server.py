@@ -527,99 +527,125 @@ def calculate_signal_levels(
     mode: str,
     timeframe: str
 ) -> Dict:
-    """Calculate Entry/SL/TP based on real market structure"""
+    """Calculate OPTIMAL Entry/SL/TP based on real market structure"""
     
     atr = structure.get("atr", current_price * 0.02)
     
-    # Mode multipliers for SL/TP
+    # Mode config: RR requirements vary by mode
     mode_config = {
-        "scalping": {"sl_mult": 0.5, "tp_mult": 1.0, "min_rr": 1.5},
-        "intraday": {"sl_mult": 1.0, "tp_mult": 2.0, "min_rr": 2.0},
-        "swing": {"sl_mult": 1.5, "tp_mult": 3.5, "min_rr": 2.5}
+        "scalping": {"min_rr": 1.5, "sl_buffer": 0.3},
+        "intraday": {"min_rr": 2.0, "sl_buffer": 0.2},
+        "swing": {"min_rr": 2.5, "sl_buffer": 0.15}
     }
     
-    # Timeframe adjustments
-    tf_mult = {
-        "5min": 0.5, "15min": 0.75, "1h": 1.0, "4h": 1.5, "1d": 2.0
-    }
+    # Timeframe adjustments for SL buffer
+    tf_mult = {"5min": 0.5, "15min": 0.75, "1h": 1.0, "4h": 1.5, "1d": 2.0}
     
     config = mode_config.get(mode, mode_config["intraday"])
     tf = tf_mult.get(timeframe, 1.0)
     
-    # Entry is current market price
-    entry = current_price
+    decimals = 2 if current_price > 10 else 4
     
     if direction == "BUY":
-        # SL below nearest swing low or support
+        # OPTIMAL ENTRY: Use 61.8% fib level or Order Block zone (discount zone)
+        optimal_entry = structure.get("optimal_entry_buy")
+        
+        # Check for Order Blocks
+        obs = [ob for ob in structure.get("order_blocks", []) if ob["type"] == "BULLISH_OB"]
+        if obs:
+            # Entry at OB zone (better entry)
+            optimal_entry = obs[0]["entry_zone"]
+        
+        # If no optimal entry found or it's above current price, use current price
+        if not optimal_entry or optimal_entry > current_price:
+            optimal_entry = current_price
+        
+        # SL below swing low with buffer
         swing_lows = structure.get("swing_lows", [])
-        if swing_lows:
-            # Find swing low below current price
-            valid_lows = [l for l in swing_lows if l < current_price]
-            sl_base = max(valid_lows) if valid_lows else current_price - atr * 1.5
+        valid_lows = [l for l in swing_lows if l < optimal_entry]
+        if valid_lows:
+            sl_base = max(valid_lows)
         else:
-            sl_base = structure.get("nearest_support", current_price - atr * 1.5)
+            sl_base = structure.get("nearest_support", optimal_entry - atr * 1.5)
         
-        # Add buffer below swing low
-        sl = sl_base - (atr * 0.2)
+        sl = sl_base - (atr * config["sl_buffer"] * tf)
         
-        # TP at liquidity above or resistance
+        # TP targets liquidity above
         liquidity_above = structure.get("liquidity_above", [])
+        nearest_resistance = structure.get("nearest_resistance", optimal_entry + atr * 3)
+        recent_high = structure.get("recent_high", optimal_entry + atr * 4)
+        
         if liquidity_above:
-            tp1 = liquidity_above[0]
+            tp1 = min(liquidity_above)
         else:
-            tp1 = structure.get("nearest_resistance", current_price + atr * config["tp_mult"] * tf)
+            tp1 = nearest_resistance
         
         # Ensure minimum RR
-        sl_distance = entry - sl
-        tp_distance = tp1 - entry
+        sl_distance = optimal_entry - sl
+        if sl_distance > 0:
+            min_tp = optimal_entry + (sl_distance * config["min_rr"])
+            if tp1 < min_tp:
+                tp1 = min_tp
         
-        if tp_distance / sl_distance < config["min_rr"]:
-            tp1 = entry + (sl_distance * config["min_rr"])
-        
-        tp2 = tp1 + (tp1 - entry) * 0.5
-        tp3 = structure.get("recent_high", tp1 + (tp1 - entry))
+        tp2 = nearest_resistance if nearest_resistance > tp1 else tp1 + (tp1 - optimal_entry) * 0.5
+        tp3 = recent_high
         
     else:  # SELL
-        # SL above nearest swing high or resistance
+        # OPTIMAL ENTRY: Use 61.8% fib level or Order Block zone (premium zone)
+        optimal_entry = structure.get("optimal_entry_sell")
+        
+        # Check for Order Blocks
+        obs = [ob for ob in structure.get("order_blocks", []) if ob["type"] == "BEARISH_OB"]
+        if obs:
+            optimal_entry = obs[0]["entry_zone"]
+        
+        # If no optimal entry or it's below current price, use current price
+        if not optimal_entry or optimal_entry < current_price:
+            optimal_entry = current_price
+        
+        # SL above swing high with buffer
         swing_highs = structure.get("swing_highs", [])
-        if swing_highs:
-            valid_highs = [h for h in swing_highs if h > current_price]
-            sl_base = min(valid_highs) if valid_highs else current_price + atr * 1.5
+        valid_highs = [h for h in swing_highs if h > optimal_entry]
+        if valid_highs:
+            sl_base = min(valid_highs)
         else:
-            sl_base = structure.get("nearest_resistance", current_price + atr * 1.5)
+            sl_base = structure.get("nearest_resistance", optimal_entry + atr * 1.5)
         
-        # Add buffer above swing high
-        sl = sl_base + (atr * 0.2)
+        sl = sl_base + (atr * config["sl_buffer"] * tf)
         
-        # TP at liquidity below or support
+        # TP targets liquidity below
         liquidity_below = structure.get("liquidity_below", [])
+        nearest_support = structure.get("nearest_support", optimal_entry - atr * 3)
+        recent_low = structure.get("recent_low", optimal_entry - atr * 4)
+        
         if liquidity_below:
-            tp1 = liquidity_below[0]
+            tp1 = max(liquidity_below)
         else:
-            tp1 = structure.get("nearest_support", current_price - atr * config["tp_mult"] * tf)
+            tp1 = nearest_support
         
         # Ensure minimum RR
-        sl_distance = sl - entry
-        tp_distance = entry - tp1
+        sl_distance = sl - optimal_entry
+        if sl_distance > 0:
+            min_tp = optimal_entry - (sl_distance * config["min_rr"])
+            if tp1 > min_tp:
+                tp1 = min_tp
         
-        if tp_distance / sl_distance < config["min_rr"]:
-            tp1 = entry - (sl_distance * config["min_rr"])
-        
-        tp2 = tp1 - (entry - tp1) * 0.5
-        tp3 = structure.get("recent_low", tp1 - (entry - tp1))
+        tp2 = nearest_support if nearest_support < tp1 else tp1 - (optimal_entry - tp1) * 0.5
+        tp3 = recent_low
     
-    decimals = 2 if current_price > 10 else 4
-    rr = round(abs(tp1 - entry) / abs(entry - sl), 2) if abs(entry - sl) > 0 else 2.0
+    rr = round(abs(tp1 - optimal_entry) / abs(optimal_entry - sl), 2) if abs(optimal_entry - sl) > 0 else config["min_rr"]
     
     return {
-        "entry": round(entry, decimals),
+        "optimal_entry": round(optimal_entry, decimals),
+        "current_price": round(current_price, decimals),
         "sl": round(sl, decimals),
         "tp1": round(tp1, decimals),
         "tp2": round(tp2, decimals),
         "tp3": round(tp3, decimals),
         "rr": rr,
-        "sl_distance": round(abs(entry - sl), decimals),
-        "tp_distance": round(abs(tp1 - entry), decimals)
+        "sl_distance": round(abs(optimal_entry - sl), decimals),
+        "tp_distance": round(abs(tp1 - optimal_entry), decimals),
+        "entry_type": "LIMIT" if optimal_entry != current_price else "MARKET"
     }
 
 # ==================== 5 ADVANCED STRATEGIES ====================
