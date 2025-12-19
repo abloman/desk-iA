@@ -182,7 +182,7 @@ class AlphaMindV5Tester:
         
         if success:
             delay_minutes = cme_info.get('delay_minutes')
-            cme_symbols = cme_info.get('cme_symbols', [])
+            cme_futures = cme_info.get('cme_futures', [])
             
             self.log_test(
                 "CME delay is 10 minutes",
@@ -193,14 +193,14 @@ class AlphaMindV5Tester:
             )
             
             expected_cme_symbols = ["ES", "NQ", "CL", "GC", "SI"]
-            has_expected_symbols = all(symbol in cme_symbols for symbol in expected_cme_symbols)
+            has_expected_symbols = all(symbol in cme_futures for symbol in expected_cme_symbols)
             
             self.log_test(
                 "CME symbols include ES, NQ futures",
                 has_expected_symbols,
-                f"Found symbols: {cme_symbols}",
+                f"Found symbols: {cme_futures}",
                 expected_cme_symbols,
-                cme_symbols
+                cme_futures
             )
         
         # Test chart data for CME futures to verify delay
