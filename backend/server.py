@@ -832,13 +832,21 @@ ADVANCED_STRATEGIES = {
     }
 }
 
-def calculate_levels_advanced(price: float, direction: str, strategy: str, symbol: str, volatility: Dict) -> Dict:
-    """Calculate entry, SL, TP based on advanced strategy with volatility consideration"""
+def calculate_levels_advanced(price: float, direction: str, strategy: str, symbol: str, volatility: Dict, mode: str = "intraday") -> Dict:
+    """Calculate entry, SL, TP based on advanced strategy with volatility and mode consideration"""
     
     atr = volatility["atr"]
     strat = ADVANCED_STRATEGIES.get(strategy, ADVANCED_STRATEGIES["smc_ict_advanced"])
     
-    sl_distance = atr * strat["sl_atr_mult"]
+    # Mode multiplier for SL: scalping = tighter SL, swing = wider SL
+    mode_sl_mult = {
+        "scalping": 0.5,   # 50% tighter SL for scalping
+        "intraday": 1.0,   # Normal SL
+        "swing": 1.5       # 50% wider SL for swing trades
+    }
+    sl_mult = mode_sl_mult.get(mode, 1.0)
+    
+    sl_distance = atr * strat["sl_atr_mult"] * sl_mult
     tp_distance = atr * strat["tp_atr_mult"]
     
     # Ensure minimum RR ratio
@@ -866,7 +874,9 @@ def calculate_levels_advanced(price: float, direction: str, strategy: str, symbo
         "tp3": round(tp3, decimals),
         "rr": round(tp_distance / sl_distance, 2),
         "sl_pips": round(sl_distance, decimals),
-        "tp_pips": round(tp_distance, decimals)
+        "tp_pips": round(tp_distance, decimals),
+        "mode": mode,
+        "sl_multiplier": sl_mult
     }
 
 def generate_advanced_analysis(strategy: str, price: float, symbol: str, volatility: Dict) -> Dict:
