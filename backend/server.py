@@ -37,6 +37,13 @@ api_router = APIRouter(prefix="/api")
 PRICE_CACHE = {}
 PRICE_CACHE_TIME = None
 
+# ==================== CME FUTURES CACHE (10 MIN DELAY) ====================
+CME_CACHE = {}  # {symbol: {"data": [], "timestamp": datetime}}
+CME_DELAY_MINUTES = 10
+
+# CME Futures symbols that require 10-min delay
+CME_FUTURES = ["ES", "NQ", "CL", "GC", "SI"]
+
 # ==================== MODELS ====================
 
 class UserCreate(BaseModel):
