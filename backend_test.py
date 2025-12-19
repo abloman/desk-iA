@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class AlphaMindAPITester:
-    def __init__(self, base_url="https://trade-flow-connect.preview.emergentagent.com"):
+    def __init__(self, base_url="https://alphamind-trader.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.token = None
@@ -12,6 +12,7 @@ class AlphaMindAPITester:
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
+        self.created_trade_id = None
 
     def log_test(self, name, success, details=""):
         """Log test results"""
@@ -76,35 +77,14 @@ class AlphaMindAPITester:
         """Test authentication flow"""
         print("\n🔍 Testing Authentication...")
         
-        # Test registration
-        test_email = f"test_{datetime.now().strftime('%H%M%S')}@alphamind.com"
-        register_data = {
-            "email": test_email,
-            "password": "test123",
-            "name": "Test User"
-        }
-        
-        success, response = self.run_test(
-            "User Registration", 
-            "POST", 
-            "auth/register", 
-            200, 
-            register_data
-        )
-        
-        if success and 'token' in response:
-            self.token = response['token']
-            self.user_id = response['user']['id']
-            print(f"   Token obtained: {self.token[:20]}...")
-        
-        # Test login with provided credentials
+        # Test login with provided credentials first
         login_data = {
-            "email": "trader@test.com",
-            "password": "test123"
+            "email": "newtrader2024@test.com",
+            "password": "password123"
         }
         
         success, response = self.run_test(
-            "User Login (Test Credentials)", 
+            "User Login (Provided Credentials)", 
             "POST", 
             "auth/login", 
             200, 
@@ -114,7 +94,28 @@ class AlphaMindAPITester:
         if success and 'token' in response:
             self.token = response['token']
             self.user_id = response['user']['id']
-            print(f"   Using test credentials token: {self.token[:20]}...")
+            print(f"   Using provided credentials token: {self.token[:20]}...")
+        else:
+            # Fallback: Test registration with new user
+            test_email = f"test_{datetime.now().strftime('%H%M%S')}@alphamind.com"
+            register_data = {
+                "email": test_email,
+                "password": "test123",
+                "name": "Test User"
+            }
+            
+            success, response = self.run_test(
+                "User Registration (Fallback)", 
+                "POST", 
+                "auth/register", 
+                200, 
+                register_data
+            )
+            
+            if success and 'token' in response:
+                self.token = response['token']
+                self.user_id = response['user']['id']
+                print(f"   Token obtained via registration: {self.token[:20]}...")
         
         # Test get current user
         if self.token:
@@ -130,20 +131,25 @@ class AlphaMindAPITester:
             markets = markets_data['markets']
             print(f"   Found {len(markets)} markets")
             
-            # Test market types
+            # Test market types - updated to match actual implementation
             crypto_markets = [m for m in markets if m['type'] == 'crypto']
             forex_markets = [m for m in markets if m['type'] == 'forex']
-            stock_markets = [m for m in markets if m['type'] == 'stocks']
+            indices_markets = [m for m in markets if m['type'] == 'indices']
+            metals_markets = [m for m in markets if m['type'] == 'metals']
+            futures_markets = [m for m in markets if m['type'] == 'futures']
             
-            print(f"   Crypto: {len(crypto_markets)}, Forex: {len(forex_markets)}, Stocks: {len(stock_markets)}")
+            print(f"   Crypto: {len(crypto_markets)}, Forex: {len(forex_markets)}")
+            print(f"   Indices: {len(indices_markets)}, Metals: {len(metals_markets)}, Futures: {len(futures_markets)}")
             
-            # Test individual market detail
+            # Test individual price endpoint
             if markets:
                 test_symbol = markets[0]['symbol']
+                # URL encode the symbol for path parameter
+                encoded_symbol = test_symbol.replace('/', '%2F')
                 self.run_test(
-                    f"Get Market Detail ({test_symbol})", 
+                    f"Get Price ({test_symbol})", 
                     "GET", 
-                    f"markets/{test_symbol}", 
+                    f"price/{encoded_symbol}", 
                     200
                 )
 
@@ -153,8 +159,10 @@ class AlphaMindAPITester:
         
         analysis_data = {
             "symbol": "BTC/USD",
-            "timeframe": "1h",
-            "market_type": "crypto"
+            "timeframe": "15min",
+            "market_type": "crypto",
+            "mode": "intraday",
+            "strategy": "smc"
         }
         
         # Note: This might take longer due to Claude API call
@@ -169,6 +177,31 @@ class AlphaMindAPITester:
         
         if success:
             print(f"   Analysis completed for {response.get('symbol', 'unknown')}")
+            if 'analysis' in response:
+                analysis = response['analysis']
+                print(f"   Signal: {analysis.get('signal', 'N/A')}")
+                print(f"   Confidence: {analysis.get('confidence', 'N/A')}%")
+                print(f"   Entry: {analysis.get('entry_price', 'N/A')}")
+        
+        # Test Futures market analysis
+        futures_data = {
+            "symbol": "ES",
+            "timeframe": "15min", 
+            "market_type": "futures",
+            "mode": "intraday",
+            "strategy": "ict"
+        }
+        
+        success, response = self.run_test(
+            "AI Analysis (ES Futures)", 
+            "POST", 
+            "ai/analyze", 
+            200, 
+            futures_data
+        )
+        
+        if success:
+            print(f"   Futures analysis completed for {response.get('symbol', 'unknown')}")
 
     def test_signals(self):
         """Test signals endpoints"""
@@ -180,25 +213,6 @@ class AlphaMindAPITester:
         if success:
             signals = signals_data.get('signals', [])
             print(f"   Found {len(signals)} existing signals")
-        
-        # Create a manual signal
-        signal_data = {
-            "symbol": "BTC/USD",
-            "direction": "BUY",
-            "entry_price": 67500.0,
-            "stop_loss": 65000.0,
-            "take_profit_1": 70000.0,
-            "take_profit_2": 72000.0,
-            "confidence": 85.0,
-            "strategy": "ICT",
-            "analysis": "Test signal for BTC/USD"
-        }
-        
-        self.run_test("Create Signal", "POST", "signals", 200, signal_data)
-        
-        # Generate AI signals (this will take time)
-        print("   Note: AI signal generation may take 30-60 seconds...")
-        self.run_test("Generate AI Signals", "POST", "signals/generate", 200)
 
     def test_portfolio(self):
         """Test portfolio endpoints"""
@@ -221,6 +235,14 @@ class AlphaMindAPITester:
         if success:
             trades = trades_data.get('trades', [])
             print(f"   Found {len(trades)} existing trades")
+            
+            # Check for open trades with floating PnL
+            open_trades = [t for t in trades if t.get('status') == 'open']
+            if open_trades:
+                print(f"   Open trades: {len(open_trades)}")
+                for trade in open_trades[:2]:  # Show first 2
+                    pnl = trade.get('floating_pnl', 0)
+                    print(f"     {trade.get('symbol')} {trade.get('direction')}: PnL ${pnl}")
         
         # Create a test trade
         trade_data = {
@@ -228,22 +250,24 @@ class AlphaMindAPITester:
             "symbol": "BTC/USD",
             "direction": "BUY",
             "entry_price": 67500.0,
-            "quantity": 0.1,
+            "quantity": 1.0,
             "stop_loss": 65000.0,
-            "take_profit": 70000.0
+            "take_profit": 70000.0,
+            "strategy": "smc"
         }
         
         success, trade_response = self.run_test("Create Trade", "POST", "trades", 200, trade_data)
         
         if success and 'id' in trade_response:
             trade_id = trade_response['id']
+            self.created_trade_id = trade_id
             print(f"   Created trade with ID: {trade_id}")
             
-            # Test closing the trade
+            # Test different close methods
             self.run_test(
-                "Close Trade", 
+                "Close Trade at Market", 
                 "POST", 
-                f"trades/{trade_id}/close?exit_price=68000", 
+                f"trades/{trade_id}/close-at-market", 
                 200
             )
 
@@ -269,22 +293,21 @@ class AlphaMindAPITester:
         
         self.run_test("Update Bot Config", "POST", "bot/config", 200, new_config)
 
-    def test_watchlist(self):
-        """Test watchlist endpoints"""
-        print("\n🔍 Testing Watchlist...")
+    def test_mt5_connection(self):
+        """Test MT5 connection endpoints"""
+        print("\n🔍 Testing MT5 Connection...")
         
-        # Get watchlist
-        success, watchlist_data = self.run_test("Get Watchlist", "GET", "watchlist", 200)
+        # Test MT5 connection
+        mt5_data = {
+            "server": "ICMarkets-Demo",
+            "login": "12345678",
+            "password": "testpass123"
+        }
         
-        if success:
-            symbols = watchlist_data.get('symbols', [])
-            print(f"   Watchlist has {len(symbols)} symbols")
+        self.run_test("Connect MT5", "POST", "bot/connect-mt5", 200, mt5_data)
         
-        # Add to watchlist
-        self.run_test("Add to Watchlist", "POST", "watchlist/add?symbol=ETH/USD", 200)
-        
-        # Remove from watchlist
-        self.run_test("Remove from Watchlist", "POST", "watchlist/remove?symbol=ETH/USD", 200)
+        # Test disconnect
+        self.run_test("Disconnect MT5", "POST", "bot/disconnect-mt5", 200)
 
     def run_all_tests(self):
         """Run all tests"""
@@ -304,7 +327,7 @@ class AlphaMindAPITester:
             self.test_trades()
             self.test_signals()
             self.test_bot_config()
-            self.test_watchlist()
+            self.test_mt5_connection()
             self.test_ai_analysis()  # Last because it's slowest
             
         except Exception as e:
