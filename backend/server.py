@@ -452,20 +452,34 @@ def analyze_market_structure(ohlc_data: List[Dict], current_price: float) -> Dic
         price_position = "NEUTRAL"
     
     # Calculate OPTIMAL ENTRY (not current price)
-    # For BUY: Entry at 50%-61.8% retracement of last bullish move (discount)
-    # For SELL: Entry at 50%-61.8% retracement of last bearish move (premium)
+    # For BUY: Entry at discount zone (below equilibrium, near swing low)
+    # For SELL: Entry at premium zone (above equilibrium, near swing high)
     
     optimal_entry_buy = None
     optimal_entry_sell = None
     
-    if len(recent_lows) >= 1 and recent_high > recent_low:
-        # Optimal BUY entry: 50% retracement from recent high to recent low
-        fib_50 = recent_high - (range_size * 0.5)
-        fib_618 = recent_high - (range_size * 0.618)
-        optimal_entry_buy = round(fib_618, 2)  # 61.8% is better value
+    if range_size > 0:
+        # Fibonacci levels from range
+        fib_382 = recent_high - (range_size * 0.382)  # Premium
+        fib_50 = equilibrium  # Equilibrium
+        fib_618 = recent_high - (range_size * 0.618)  # Discount
+        fib_786 = recent_high - (range_size * 0.786)  # Deep discount
         
-        # Optimal SELL entry: 50% retracement from recent low to recent high  
-        optimal_entry_sell = round(recent_low + (range_size * 0.618), 2)
+        # Optimal BUY: 61.8% or 78.6% retracement (discount zone)
+        if current_price <= fib_50:
+            # Already in discount, entry can be at current or better
+            optimal_entry_buy = round(fib_618, 5 if current_price < 10 else 2)
+        else:
+            # Price in premium, wait for pullback to equilibrium or below
+            optimal_entry_buy = round(fib_50, 5 if current_price < 10 else 2)
+        
+        # Optimal SELL: 38.2% or higher (premium zone)
+        if current_price >= fib_50:
+            # Already in premium, entry can be at current or better
+            optimal_entry_sell = round(fib_382, 5 if current_price < 10 else 2)
+        else:
+            # Price in discount, wait for rally to equilibrium or above
+            optimal_entry_sell = round(fib_50, 5 if current_price < 10 else 2)
     
     # Order Block detection (simplified: last bearish candle before bullish move, vice versa)
     order_blocks = []
