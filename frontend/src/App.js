@@ -267,17 +267,22 @@ function TradingPage() {
           mode,
           strategy,
           direction: a.signal,
-          entry: a.entry_price,
+          current_price: a.current_price,
+          optimal_entry: a.optimal_entry,
+          entry_type: a.entry_type,  // LIMIT or MARKET
           sl: a.stop_loss,
           tp: a.take_profit_1,
           tp2: a.take_profit_2,
           tp3: a.take_profit_3,
           rr: a.rr_ratio,
+          sl_distance: a.sl_distance,
+          tp_distance: a.tp_distance,
           confidence: a.confidence,
-          analysis: a.analysis,  // Contains structure data
+          analysis: a.analysis,  // Contains structure, BOS, OB data
           reasoning: a.reasoning
         });
-        setMessage("Signal généré avec analyse de structure réelle !");
+        const entryType = a.entry_type === "LIMIT" ? "Entrée optimale recommandée" : "Entrée au marché";
+        setMessage(`Signal généré ! ${entryType}`);
       }
     } catch (e) {
       setMessage("Erreur: " + (e.response?.data?.detail || e.message));
