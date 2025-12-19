@@ -877,14 +877,20 @@ function TradingChartComponent({ symbol, signal, trades = [], onPriceUpdate }) {
       setLoading(true);
       const data = await fetchChartData();
       if (data && data.data && data.data.length > 0) {
-        const candles = data.data.map(d => ({
-          time: Math.floor(d.time / 1000),
-          open: d.open, high: d.high, low: d.low, close: d.close
-        }));
-        series.setData(candles);
-        chart.timeScale().fitContent();
-        setCurrentPrice(data.current_price);
-        if (onPriceUpdate) onPriceUpdate(data.current_price);
+        // Convert timestamps - Yahoo Finance returns milliseconds
+        const candles = data.data.map(d => {
+          let time = d.time;
+          // If time is in milliseconds (> 1e12), convert to seconds
+          if (time > 1e12) time = Math.floor(time / 1000);
+          return { time, open: d.open, high: d.high, low: d.low, close: d.close };
+        }).filter(c => c.time > 0); // Filter invalid times
+        
+        if (candles.length > 0) {
+          series.setData(candles);
+          chart.timeScale().fitContent();
+          setCurrentPrice(data.current_price);
+          if (onPriceUpdate) onPriceUpdate(data.current_price);
+        }
       }
       setLoading(false);
     };
