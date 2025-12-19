@@ -337,12 +337,19 @@ function TradingPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {/* Chart with Entry/SL/TP Lines */}
+        {/* TradingView Chart with Full Tools */}
         <div className="col-span-2 bg-slate-900 rounded-xl border border-slate-800 p-4">
           <TradingChartComponent 
             symbol={symbol} 
-            signal={signal} 
-            trades={openTrades}
+            market={market}
+            signal={signal ? {
+              direction: signal.direction,
+              entry: signal.entry,
+              sl: signal.sl,
+              tp: signal.tp,
+              rr: signal.rr,
+              structure: signal.analysis
+            } : null}
           />
         </div>
 
