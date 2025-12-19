@@ -544,6 +544,8 @@ def calculate_signal_levels(
     """Calculate OPTIMAL Entry/SL/TP based on real market structure"""
     
     atr = structure.get("atr", current_price * 0.02)
+    equilibrium = structure.get("equilibrium", current_price)
+    price_position = structure.get("price_position", "NEUTRAL")
     
     # Mode config: RR requirements vary by mode
     mode_config = {
@@ -558,21 +560,32 @@ def calculate_signal_levels(
     config = mode_config.get(mode, mode_config["intraday"])
     tf = tf_mult.get(timeframe, 1.0)
     
-    decimals = 2 if current_price > 10 else 4
+    decimals = 5 if current_price < 10 else 2
     
     if direction == "BUY":
-        # OPTIMAL ENTRY: Use 61.8% fib level or Order Block zone (discount zone)
+        # OPTIMAL ENTRY: Discount zone entry
         optimal_entry = structure.get("optimal_entry_buy")
         
-        # Check for Order Blocks
+        # Check for Order Blocks for better entry
         obs = [ob for ob in structure.get("order_blocks", []) if ob["type"] == "BULLISH_OB"]
-        if obs:
-            # Entry at OB zone (better entry)
+        if obs and obs[0]["entry_zone"] < current_price:
             optimal_entry = obs[0]["entry_zone"]
         
-        # If no optimal entry found or it's above current price, use current price
-        if not optimal_entry or optimal_entry > current_price:
-            optimal_entry = current_price
+        # If we're already in discount, optimal = current, else wait for pullback
+        if price_position == "DISCOUNT":
+            # Good position, can enter at market or wait for better
+            if optimal_entry and optimal_entry < current_price:
+                entry_type = "LIMIT"
+            else:
+                optimal_entry = current_price
+                entry_type = "MARKET"
+        else:
+            # In premium/equilibrium, suggest waiting for discount
+            if optimal_entry and optimal_entry < current_price:
+                entry_type = "LIMIT"
+            else:
+                optimal_entry = equilibrium  # Wait for equilibrium at least
+                entry_type = "LIMIT"
         
         # SL below swing low with buffer
         swing_lows = structure.get("swing_lows", [])
@@ -584,15 +597,12 @@ def calculate_signal_levels(
         
         sl = sl_base - (atr * config["sl_buffer"] * tf)
         
-        # TP targets liquidity above
+        # TP targets
         liquidity_above = structure.get("liquidity_above", [])
         nearest_resistance = structure.get("nearest_resistance", optimal_entry + atr * 3)
         recent_high = structure.get("recent_high", optimal_entry + atr * 4)
         
-        if liquidity_above:
-            tp1 = min(liquidity_above)
-        else:
-            tp1 = nearest_resistance
+        tp1 = min(liquidity_above) if liquidity_above else nearest_resistance
         
         # Ensure minimum RR
         sl_distance = optimal_entry - sl
@@ -605,17 +615,27 @@ def calculate_signal_levels(
         tp3 = recent_high
         
     else:  # SELL
-        # OPTIMAL ENTRY: Use 61.8% fib level or Order Block zone (premium zone)
+        # OPTIMAL ENTRY: Premium zone entry
         optimal_entry = structure.get("optimal_entry_sell")
         
         # Check for Order Blocks
         obs = [ob for ob in structure.get("order_blocks", []) if ob["type"] == "BEARISH_OB"]
-        if obs:
+        if obs and obs[0]["entry_zone"] > current_price:
             optimal_entry = obs[0]["entry_zone"]
         
-        # If no optimal entry or it's below current price, use current price
-        if not optimal_entry or optimal_entry < current_price:
-            optimal_entry = current_price
+        # If we're already in premium, optimal = current, else wait for rally
+        if price_position == "PREMIUM":
+            if optimal_entry and optimal_entry > current_price:
+                entry_type = "LIMIT"
+            else:
+                optimal_entry = current_price
+                entry_type = "MARKET"
+        else:
+            if optimal_entry and optimal_entry > current_price:
+                entry_type = "LIMIT"
+            else:
+                optimal_entry = equilibrium
+                entry_type = "LIMIT"
         
         # SL above swing high with buffer
         swing_highs = structure.get("swing_highs", [])
@@ -627,15 +647,12 @@ def calculate_signal_levels(
         
         sl = sl_base + (atr * config["sl_buffer"] * tf)
         
-        # TP targets liquidity below
+        # TP targets
         liquidity_below = structure.get("liquidity_below", [])
         nearest_support = structure.get("nearest_support", optimal_entry - atr * 3)
         recent_low = structure.get("recent_low", optimal_entry - atr * 4)
         
-        if liquidity_below:
-            tp1 = max(liquidity_below)
-        else:
-            tp1 = nearest_support
+        tp1 = max(liquidity_below) if liquidity_below else nearest_support
         
         # Ensure minimum RR
         sl_distance = sl - optimal_entry
@@ -656,10 +673,10 @@ def calculate_signal_levels(
         "tp1": round(tp1, decimals),
         "tp2": round(tp2, decimals),
         "tp3": round(tp3, decimals),
-        "rr": rr,
+        "rr": max(rr, config["min_rr"]),  # Ensure minimum RR
         "sl_distance": round(abs(optimal_entry - sl), decimals),
         "tp_distance": round(abs(tp1 - optimal_entry), decimals),
-        "entry_type": "LIMIT" if optimal_entry != current_price else "MARKET"
+        "entry_type": entry_type
     }
 
 # ==================== 5 ADVANCED STRATEGIES ====================
