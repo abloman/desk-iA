@@ -16,6 +16,8 @@ import asyncio
 import httpx
 import json
 import random
+import yfinance as yf
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
